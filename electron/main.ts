@@ -281,11 +281,14 @@ function setupIpcHandlers() {
     store.set('triggerBarcodes', settings.triggerBarcodes);
     return { success: true };
   });
-
   ipcMain.handle('close-scan-window', () => {
     if (scanWindow) {
       scanWindow.close();
     }
+  });
+
+  ipcMain.handle('show-scan-window', () => {
+    showScanWindow();
   });
 
   ipcMain.handle('minimize-to-tray', () => {

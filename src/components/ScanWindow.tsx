@@ -124,7 +124,7 @@ export default function ScanWindow() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-600 rounded-lg">
-              <Scan className="w-6 h-6 text-white" />
+              <img src="/assets/logo.svg" alt="Harrys lilla Lager" className="w-6 h-6" />
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900">Harrys lilla Lager - Aktiv</h1>

@@ -56,11 +56,11 @@ export interface Equipment {
 export interface ElectronAPI {
   getScanLogs: (filters?: any) => Promise<ScanLog[]>;
   getStatistics: () => Promise<Statistics>;
-  processBarcode: (barcode: string) => Promise<ScanResult>;
-  exportData: (format: 'csv' | 'json') => Promise<{ success: boolean; filePath?: string; error?: string }>;
+  processBarcode: (barcode: string) => Promise<ScanResult>;  exportData: (format: 'csv' | 'json') => Promise<{ success: boolean; filePath?: string; error?: string }>;
   getSettings: () => Promise<AppSettings>;
   saveSettings: (settings: AppSettings) => Promise<{ success: boolean }>;
   closeScanWindow: () => Promise<void>;
+  showScanWindow: () => Promise<void>;
   minimizeToTray: () => Promise<void>;
   
   // Equipment management

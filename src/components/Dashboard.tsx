@@ -90,7 +90,7 @@ export default function Dashboard() {
         {/* Header */}        <div className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Package className="w-6 h-6 text-white" />
+              <img src="/assets/logo.svg" alt="Harrys lilla Lager" className="w-8 h-8" />
             </div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900">

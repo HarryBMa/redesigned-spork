@@ -16,9 +16,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Settings
   getSettings: () => ipcRenderer.invoke('get-settings'),
   saveSettings: (settings: any) => ipcRenderer.invoke('save-settings', settings),
-  
-  // Window management
+    // Window management
   closeScanWindow: () => ipcRenderer.invoke('close-scan-window'),
+  showScanWindow: () => ipcRenderer.invoke('show-scan-window'),
   minimizeToTray: () => ipcRenderer.invoke('minimize-to-tray'),
   
   // Event listeners
