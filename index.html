@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Harrys lilla Lager</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
+        .status.error {
+            background: linear-gradient(135deg, #e17055, #d63031);
+            color: white;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .scanner-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+
+        .instructions {
+            font-size: 1.1em;
+            color: #636e72;
+            margin-top: 20px;
+            line-height: 1.6;
+        }
+
+        .barcode-input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 1.2em;
+            margin: 20px 0;
+            text-align: center;
+            display: none;
+        }
+
+        .department-display {
+            background: linear-gradient(135deg, #a29bfe, #6c5ce7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            display: inline-block;
+            margin-top: 15px;
+            font-weight: 600;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: #e17055;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            cursor: pointer;
+            font-size: 1.2em;
+        }
+
+        .auto-hide-info {
+            font-size: 0.9em;
+            color: #74b9ff;
+            margin-top: 15px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="scanner-container">
+        <button class="close-btn" onclick="window.close()">×</button>
+        
+        <div class="scanner-icon">📱</div>
+        
+        <div id="status" class="status waiting">
+            Väntar på startskanning...
+        </div>
+        
+        <input type="text" id="barcodeInput" class="barcode-input" autofocus>
+        
+        <div class="instructions" id="instructions">
+            Skanna <strong>SKANNA_START</strong> streckkoden för att börja
+        </div>
+        
+        <div id="departmentDisplay" class="department-display" style="display: none;"></div>
+        
+        <div class="auto-hide-info">
+            Fönstret stängs automatiskt efter 15 sekunder av inaktivitet
+        </div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+        let isListening = false;
+        let hideTimeout;
+
+        const statusEl = document.getElementById('status');
+        const instructionsEl = document.getElementById('instructions');
+        const barcodeInput = document.getElementById('barcodeInput');
+        const departmentDisplay = document.getElementById('departmentDisplay');
+
+        // Focus management
+        function ensureFocus() {
+            barcodeInput.focus();
+            barcodeInput.select();
+        }
+
+        // Handle barcode input
+        barcodeInput.addEventListener('input', async (e) => {
+            const barcode = e.target.value.trim();
+            
+            if (barcode.length >= 8) { // Minimum barcode length
+                try {
+                    const result = await ipcRenderer.invoke('scan-barcode', barcode);
+                    handleScanResult(result);
+                    barcodeInput.value = '';
+                } catch (error) {
+                    showError('Fel vid skanning');
+                    barcodeInput.value = '';
+                }
+            }
+        });
+
+        function handleScanResult(result) {
+            if (result.isTrigger) {
+                startListening();
+            } else if (result.success) {
+                showSuccess(result.message, result.department);
+                setTimeout(stopListening, 2000);
+            } else {
+                showError(result.message);
+            }
+        }
+
+        function startListening() {
+            isListening = true;
+            statusEl.className = 'status listening';
+            statusEl.textContent = 'Redo att skanna utrustning';
+            instructionsEl.innerHTML = 'Skanna <strong>utrustningens streckkod</strong> nu';
+            barcodeInput.style.display = 'block';
+            ensureFocus();
+            
+            // Reset hide timer
+            resetHideTimer();
+        }
+
+        function stopListening() {
+            isListening = false;
+            statusEl.className = 'status waiting';
+            statusEl.textContent = 'Väntar på startskanning...';
+            instructionsEl.innerHTML = 'Skanna <strong>SKANNA_START</strong> streckkoden för att börja';
+            barcodeInput.style.display = 'none';
+            departmentDisplay.style.display = 'none';
+        }
+
+        function showSuccess(message, department) {
+            statusEl.className = 'status success';
+            statusEl.textContent = message;
+            
+            if (department) {
+                departmentDisplay.textContent = department;
+                departmentDisplay.style.display = 'inline-block';
+            }
+        }
+
+        function showError(message) {
+            statusEl.className = 'status error';
+            statusEl.textContent = message;
+            departmentDisplay.style.display = 'none';
+        }
+
+        function resetHideTimer() {
+            clearTimeout(hideTimeout);
+            hideTimeout = setTimeout(() => {
+                window.close();
+            }, 15000);
+        }
+
+        // IPC listeners
+        ipcRenderer.on('listening-started', startListening);
+        ipcRenderer.on('listening-stopped', stopListening);
+
+        // Initialize
+        window.addEventListener('load', () => {
+            ensureFocus();
+            resetHideTimer();
+        });
+
+        // Keep focus
+        window.addEventListener('blur', () => {
+            setTimeout(ensureFocus, 100);
+        });
+
+        // Reset timer on any activity
+        document.addEventListener('keydown', resetHideTimer);
+        document.addEventListener('click', resetHideTimer);
+    </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lager Adminpanel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f6fa;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .tabs {
+            display: flex;
+            background: white;
+            border-radius: 10px 10px 0 0;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 0;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 15px 20px;
+            background: #ecf0f1;
+            border: none;
+            cursor: pointer;
+            font-size: 1.1em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .tab.active {
+            background: #3498db;
+            color: white;
+        }
+
+        .tab-content {
+            background: white;
+            border-radius: 0 0 10px 10px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            min-height: 600px;
+        }
+
+        .tab-pane {
+            display: none;
+        }
+
+        .tab-pane.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+        }
+
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border-left: 5px solid #3498db;
+        }
+
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: 700;
+            color: #3498db;
+            margin-bottom: 10px;
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .table th {
+            background: #34495e;
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        .table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .status-badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .status-tillganglig {
+            background: #d5f4e6;
+            color: #27ae60;
+        }
+
+        .status-saknas {
+            background: #ffeaa7;
+            color: #e17055;
+        }
+
+        .alert {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: #d5f4e6;
+            color: #27ae60;
+            border-left: 4px solid #27ae60;
+        }
+
+        .alert-error {
+            background: #ffeaa7;
+            color: #e17055;
+            border-left: 4px solid #e17055;
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+            margin-bottom: 20px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .barcode-generator {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .barcode-display {
+            font-family: 'Courier New', monospace;
+            font-size: 2em;
+            font-weight: bold;
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border: 3px dashed #3498db;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏥 Kirurgisk Lager Adminpanel</h1>
+        <p>Hantera utrustning och lagerinställningar</p>
+    </div>
+
+    <div class="container">
+        <div id="alertArea"></div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('overview')">Översikt</button>
+            <button class="tab" onclick="showTab('inventory')">Lager</button>
+            <button class="tab" onclick="showTab('add-item')">Lägg till Utrustning</button>
+            <button class="tab" onclick="showTab('settings')">Inställningar</button>
+        </div>
+
+        <div class="tab-content">
+            <!-- Overview Tab -->
+            <div id="overview" class="tab-pane active">
+                <h2>📊 Lageröversikt</h2>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number" id="totalItems">0</div>
+                        <h3>Total Utrustning</h3>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="missingItems">0</div>
+                        <h3>Saknas</h3>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="availableItems">0</div>
+                        <h3>Tillgängliga</h3>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="totalDepartments">0</div>
+                        <h3>Avdelningar</h3>
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    <button class="btn btn-primary" onclick="exportToExcel()">📊 Exportera till Excel</button>
+                    <button class="btn btn-secondary" onclick="exportInventory()">📋 Exportera Komplett Lager</button>
+                    <button class="btn btn-success" onclick="refreshData()">🔄 Uppdatera Data</button>
+                </div>
+
+                <h3 style="margin-top: 30px;">Saknad Utrustning per Avdelning</h3>
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Avdelning</th>
+                                <th>Antal Saknade</th>
+                                <th>Senast Uppdaterad</th>
+                            </tr>
+                        </thead>
+                        <tbody id="departmentStats">
+                            <tr>
+                                <td colspan="3" style="text-align: center; color: #7f8c8d;">Laddar data...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Inventory Tab -->
+            <div id="inventory" class="tab-pane">
+                <h2>📦 Lagerhantering</h2>
+                
+                <input type="text" class="search-box" placeholder="Sök efter streckkod eller namn..." id="searchBox" onkeyup="filterInventory()">
+                
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Streckkod</th>
+                                <th>Namn</th>
+                                <th>Avdelning</th>
+                                <th>Status</th>
+                                <th>Åtgärder</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryTable">
+                            <tr>
+                                <td colspan="5" style="text-align: center; color: #7f8c8d;">Laddar lager...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Add Item Tab -->
+            <div id="add-item" class="tab-pane">
+                <h2>➕ Lägg till Ny Utrustning</h2>
+                
+                <div style="max-width: 600px;">
+                    <div class="form-group">
