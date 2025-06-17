@@ -60,7 +60,7 @@ async function createScanWindow() {
         skipTaskbar: false,
         resizable: false,
         frame: true,
-        title: 'Surgical Inventory Scanner',
+        title: 'Harrys lilla Lager - Scanner',
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
@@ -82,41 +82,41 @@ function createTray() {
     const trayIcon = new electron_1.Tray(iconPath);
     const contextMenu = electron_1.Menu.buildFromTemplate([
         {
-            label: 'Show Scanner',
+            label: 'Visa Scanner',
             click: () => showScanWindow()
         },
         {
-            label: 'Show Dashboard',
+            label: 'Visa Dashboard',
             click: () => showMainWindow()
         },
         { type: 'separator' },
         {
-            label: 'Export Data',
+            label: 'Exportera Data',
             submenu: [
                 {
-                    label: 'Export CSV',
+                    label: 'Exportera CSV',
                     click: () => exportData('csv')
                 },
                 {
-                    label: 'Export JSON',
+                    label: 'Exportera JSON',
                     click: () => exportData('json')
                 }
             ]
         },
         {
-            label: 'Settings',
+            label: 'Inställningar',
             click: () => showSettings()
         },
         { type: 'separator' },
         {
-            label: 'Exit',
+            label: 'Avsluta',
             click: () => {
                 isQuitting = true;
                 electron_1.app.quit();
             }
         }
     ]);
-    trayIcon.setToolTip('Surgical Inventory System');
+    trayIcon.setToolTip('Harrys lilla Lager');
     trayIcon.setContextMenu(contextMenu);
     trayIcon.on('double-click', () => {
         showScanWindow();
@@ -255,6 +255,9 @@ function setupIpcHandlers() {
         if (scanWindow) {
             scanWindow.close();
         }
+    });
+    electron_1.ipcMain.handle('show-scan-window', () => {
+        showScanWindow();
     });
     electron_1.ipcMain.handle('minimize-to-tray', () => {
         if (mainWindow) {

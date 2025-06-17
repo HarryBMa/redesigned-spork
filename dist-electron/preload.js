@@ -16,6 +16,7 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
     saveSettings: (settings) => electron_1.ipcRenderer.invoke('save-settings', settings),
     // Window management
     closeScanWindow: () => electron_1.ipcRenderer.invoke('close-scan-window'),
+    showScanWindow: () => electron_1.ipcRenderer.invoke('show-scan-window'),
     minimizeToTray: () => electron_1.ipcRenderer.invoke('minimize-to-tray'),
     // Event listeners
     onNavigate: (callback) => {

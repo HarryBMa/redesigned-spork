@@ -1,7 +1,10 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DatabaseManager = void 0;
-const sqlite3_1 = require("sqlite3");
+const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const path_1 = require("path");
 const electron_1 = require("electron");
 class DatabaseManager {
@@ -12,7 +15,7 @@ class DatabaseManager {
     }
     async initialize() {
         return new Promise((resolve, reject) => {
-            this.db = new sqlite3_1.Database(this.dbPath, (err) => {
+            this.db = new better_sqlite3_1.default(this.dbPath, (err) => {
                 if (err) {
                     reject(err);
                     return;

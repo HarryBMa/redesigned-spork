@@ -2,12 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   Scan, 
   X, 
-  CheckCircle, 
   XCircle, 
-  Package,
+  Clock,
   ArrowUpRight,
-  ArrowDownLeft,
-  Clock
+  ArrowDownLeft
 } from 'lucide-react';
 
 interface ScanResult {
@@ -27,6 +25,7 @@ export default function ScanWindow() {
   const [lastResult, setLastResult] = useState<ScanResult | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(10);
   const inputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     // Focus input on mount
     if (inputRef.current) {
@@ -54,211 +53,163 @@ export default function ScanWindow() {
     }, 1000);
 
     return () => {
-      clearInterval(timer);
       document.removeEventListener('keydown', handleEnterKey);
+      clearInterval(timer);
     };
   }, [barcode]);
 
-  // Auto-submit when barcode value changes (for immediate processing)
+  // Reset timer when barcode changes
   useEffect(() => {
-    if (barcode.length >= 4 && !scanning) { // Minimum barcode length
-      const timer = setTimeout(() => {
-        handleScan(new Event('submit') as any);
-      }, 500); // Small delay to ensure complete scan
-
-      return () => clearTimeout(timer);
-    }
-  }, [barcode, scanning]);
-
-  const resetTimer = () => {
     setTimeRemaining(10);
-  };
+  }, [barcode]);
+
   const handleScan = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!barcode.trim()) return;
+    if (!barcode.trim() || scanning) return;
 
     setScanning(true);
-    resetTimer();
-
     try {
       const result = await window.electronAPI.processBarcode(barcode.trim());
       setLastResult(result);
-      
-      // Automatically process and clear for next scan - no user interaction needed
-      if (result.scan) {
-        // Show brief confirmation then clear
+
+      // Show result for 3 seconds then close window
+      if (result.success && !result.trigger) {
         setTimeout(() => {
-          setBarcode('');
-          setLastResult(null);
-        }, 2000); // Show result for 2 seconds then clear
-      } else {
-        setBarcode(''); // Clear immediately for trigger barcodes
+          window.electronAPI?.closeScanWindow();
+        }, 3000);
       }
+      
+      setBarcode('');
     } catch (error) {
+      console.error('Scan error:', error);
       setLastResult({
         success: false,
-        message: 'Failed to process barcode'
+        message: 'Fel vid skanning. Försök igen.'
       });
-      setTimeout(() => {
-        setBarcode('');
-        setLastResult(null);
-      }, 2000);
     } finally {
       setScanning(false);
-      // Always refocus input for continuous scanning
-      setTimeout(() => {
-        if (inputRef.current) {
-          inputRef.current.focus();
-        }      }, 100);
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
     }
   };
 
-  const closeScanWindow = () => {
+  const closeWindow = () => {
     window.electronAPI?.closeScanWindow();
   };
 
+  const getStatusColor = (result: ScanResult) => {
+    if (!result.success) return 'text-red-600 bg-red-50 border-red-200';
+    if (result.trigger) return 'text-blue-600 bg-blue-50 border-blue-200';
+    if (result.scan?.scanType === 'checkout') return 'text-red-600 bg-red-50 border-red-200';
+    return 'text-green-600 bg-green-50 border-green-200';
+  };
+
+  const getStatusIcon = (result: ScanResult) => {
+    if (!result.success) return <XCircle size={20} />;
+    if (result.trigger) return <Scan size={20} />;
+    if (result.scan?.scanType === 'checkout') return <ArrowUpRight size={20} />;
+    return <ArrowDownLeft size={20} />;
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
-      <div className="max-w-md mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-600 rounded-lg">
-              <img src="/assets/logo.svg" alt="Harrys lilla Lager" className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Harrys lilla Lager - Aktiv</h1>
-              <p className="text-sm text-gray-600">Ready for barcode input</p>
-            </div>
-          </div>
-          <button
-            onClick={closeScanWindow}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-white rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Timer */}
-        <div className="mb-6 p-4 bg-white rounded-xl shadow-sm">
+        <div className="bg-blue-600 text-white p-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-gray-500" />
-              <span className="text-sm text-gray-600">Auto-close in:</span>
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-2 rounded-lg">
+                <Scan size={24} />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold">Harrys lilla Lager</h1>
+                <p className="text-blue-100 text-sm">Scanner aktiv</p>
+              </div>
             </div>
-            <div className={`text-lg font-bold ${
-              timeRemaining <= 3 ? 'text-red-600' : 'text-gray-900'
-            }`}>
-              {timeRemaining}s
-            </div>
-          </div>
-          <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className={`h-2 rounded-full transition-all duration-1000 ${
-                timeRemaining <= 3 ? 'bg-red-500' : 'bg-blue-600'
-              }`}
-              style={{ width: `${(timeRemaining / 10) * 100}%` }}
-            ></div>
+            <button
+              onClick={closeWindow}
+              className="text-white/80 hover:text-white p-1"
+            >
+              <X size={20} />
+            </button>
           </div>
         </div>
 
-        {/* Scan Form */}
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">          <form onSubmit={handleScan} className="space-y-4">
+        {/* Main Content */}
+        <div className="p-6">
+          {/* Timer */}
+          <div className="flex items-center justify-center mb-6">
+            <div className="flex items-center gap-2 text-gray-600">
+              <Clock size={16} />
+              <span className="text-sm">Stängs automatiskt om {timeRemaining}s</span>
+            </div>
+          </div>
+
+          {/* Scan Form */}
+          <form onSubmit={handleScan} className="space-y-4">
             <div>
               <label htmlFor="barcode" className="block text-sm font-medium text-gray-700 mb-2">
-                {scanning ? 'Processing...' : 'Scan Barcode (Auto-Process)'}
+                Scanna streckkod eller skriv manuellt
               </label>
               <input
+                id="barcode"
                 ref={inputRef}
                 type="text"
-                id="barcode"
                 value={barcode}
                 onChange={(e) => setBarcode(e.target.value)}
-                onKeyDown={() => resetTimer()}
-                placeholder="Ready for barcode scan..."
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg font-mono text-center"
+                placeholder="Streckkod här..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-lg font-mono"
                 disabled={scanning}
-                autoComplete="off"
+                autoFocus
               />
-              <p className="text-xs text-gray-500 mt-1 text-center">
-                No buttons needed - just scan and it's processed automatically!
-              </p>
             </div>
-          </form>
-        </div>
 
-        {/* Last Result - Enhanced for auto-processing */}
-        {lastResult && (
-          <div className={`p-6 rounded-xl ${
-            lastResult.success 
-              ? 'bg-green-50 border-2 border-green-200' 
-              : 'bg-red-50 border-2 border-red-200'
-          }`}>
-            <div className="text-center">
-              <div className={`inline-flex p-3 rounded-full mb-4 ${
-                lastResult.success ? 'bg-green-100' : 'bg-red-100'
-              }`}>
-                {lastResult.success ? (
-                  <CheckCircle className="w-8 h-8 text-green-600" />
-                ) : (
-                  <XCircle className="w-8 h-8 text-red-600" />
-                )}
-              </div>
-              
-              <h3 className={`text-lg font-bold mb-2 ${
-                lastResult.success ? 'text-green-900' : 'text-red-900'
-              }`}>
-                {lastResult.success ? '✅ Success!' : '❌ Error'}
-              </h3>
-              
-              <p className={`font-medium ${
-                lastResult.success ? 'text-green-800' : 'text-red-800'
-              }`}>
-                {lastResult.message}
-              </p>
-              
-              {lastResult.scan && (
-                <div className="mt-4 p-4 bg-white rounded-lg">
-                  <div className="text-sm text-gray-600 mb-2">Item Details:</div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-center gap-2">
-                      <Package className="w-4 h-4 text-blue-500" />
-                      <span className="font-medium">{lastResult.scan.category}</span>
-                    </div>
-                    
-                    <div className="flex items-center justify-center gap-2">
-                      {lastResult.scan.scanType === 'checkout' ? (
-                        <>
-                          <ArrowUpRight className="w-5 h-5 text-red-500" />
-                          <span className="text-red-700 font-bold">CHECKED OUT</span>
-                        </>
-                      ) : (
-                        <>
-                          <ArrowDownLeft className="w-5 h-5 text-green-500" />
-                          <span className="text-green-700 font-bold">CHECKED IN</span>
-                        </>
-                      )}
-                    </div>
-                    
-                    <div className="text-xs text-gray-500 font-mono mt-2">
-                      {lastResult.scan.barcode}
-                    </div>
-                  </div>
-                </div>
+            <button
+              type="submit"
+              disabled={!barcode.trim() || scanning}
+              className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 font-semibold"
+            >
+              {scanning ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  Scannar...
+                </>
+              ) : (
+                <>
+                  <Scan size={20} />
+                  Scanna
+                </>
               )}
-              
-              <div className="text-xs text-gray-500 mt-3">
-                Ready for next scan...
+            </button>
+          </form>
+
+          {/* Result Display */}
+          {lastResult && (
+            <div className={`mt-6 p-4 rounded-lg border-2 ${getStatusColor(lastResult)}`}>
+              <div className="flex items-center gap-3">
+                {getStatusIcon(lastResult)}
+                <div className="flex-1">
+                  <p className="font-semibold">{lastResult.message}</p>
+                  {lastResult.scan && (
+                    <div className="mt-2 text-sm">
+                      <p><span className="font-medium">Streckkod:</span> {lastResult.scan.barcode}</p>
+                      <p><span className="font-medium">Kategori:</span> {lastResult.scan.category}</p>
+                      <p className="font-bold mt-1">
+                        {lastResult.scan.scanType === 'checkout' ? '📤 UTCHECKAD' : '📥 INCHECKAD'}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Instructions */}
-        <div className="mt-6 text-center text-sm text-gray-500">
-          <p>Använd en trådlös streckkodsläsare eller skriv manuellt</p>
-          <p>Window will close automatically after {timeRemaining} seconds of inactivity</p>
+          {/* Instructions */}
+          <div className="mt-6 text-center text-sm text-gray-500">
+            <p>Scanna en trigger-kod först för att aktivera</p>
+            <p>Sedan scanna valfri utrustning för automatisk hantering</p>
+          </div>
         </div>
       </div>
     </div>

@@ -13,7 +13,7 @@ class DatabaseManager {
         nextId: 1
     };
     constructor() {
-        this.dbPath = (0, path_1.join)(electron_1.app.getPath('userData'), 'surgical-inventory.json');
+        this.dbPath = (0, path_1.join)(electron_1.app.getPath('userData'), 'harrys-lilla-lager.json');
     }
     async initialize() {
         try {

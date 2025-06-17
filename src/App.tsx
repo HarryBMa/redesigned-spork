@@ -3,7 +3,6 @@ import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import Dashboard from './components/Dashboard';
 import ScanWindow from './components/ScanWindow';
 import Settings from './components/Settings';
-import SimpleAdminView from './components/SimpleAdminView';
 import './App.css';
 
 function App() {
@@ -40,7 +39,6 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/scan" element={<ScanWindow />} />
           <Route path="/settings" element={<Settings />} />
-          <Route path="/admin" element={<SimpleAdminView />} />
         </Routes>
       </div>
     </Router>
