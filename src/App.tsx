@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { Settings, Download, Trash2, Plus, QrCode, X } from 'lucide-react';
 import BarcodeGenerator from './components/features/BarcodeGenerator';
+import logoSvg from './assets/logo.svg';
 
 // Type definitions
 interface Article {
@@ -54,6 +55,9 @@ const App: React.FC = () => {
 
   const inputRef = useRef<HTMLInputElement>(null);
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastInputTimeRef = useRef<number>(0);
+  const inputLengthRef = useRef<number>(0);
+  const scannerDetectedRef = useRef<boolean>(false);
 
   useEffect(() => {
     // Focus input on mount
@@ -168,6 +172,67 @@ const App: React.FC = () => {
     
     // Clear the input field after submission and refocus
     setItemId('');
+    
+    // Reset detection refs
+    scannerDetectedRef.current = false;
+    lastInputTimeRef.current = 0;
+    inputLengthRef.current = 0;
+    
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
+
+  /**
+   * Handles form submission with a specific value (used for scanner auto-submit)
+   * Integrates with Tauri backend for scanning
+   */
+  const handleScanWithValue = async (trimmedId: string) => {
+    if (!trimmedId) {
+      showToast('Please enter a valid item ID', 'error');
+      return;
+    }
+
+    try {
+      // Use Tauri backend for scanning if available
+      await invoke('manual_scan_barcode', { barcode: trimmedId });
+      showToast(`Item scanned: ${trimmedId}`, 'success');
+      
+      // Refresh data
+      loadData();
+    } catch (error) {
+      console.error('Error scanning barcode:', error);
+      
+      // Fallback to local logic if Tauri backend not available
+      const existingItemIndex = articles.findIndex(article => article.id === trimmedId);
+      
+      if (existingItemIndex !== -1) {
+        // Item exists - remove it from the list
+        setArticles(prevArticles => 
+          prevArticles.filter(article => article.id !== trimmedId)
+        );
+        
+        showToast(`Item removed: ${trimmedId}`, 'warning');
+      } else {
+        // Item doesn't exist - add it to the list
+        const newArticle: Article = {
+          id: trimmedId,
+          timestamp: new Date()
+        };
+        
+        setArticles(prevArticles => [newArticle, ...prevArticles]);
+        showToast(`Item added: ${trimmedId}`, 'success');
+      }
+    }
+    
+    // Clear the input field after submission and refocus
+    setItemId('');
+    
+    // Reset detection refs
+    scannerDetectedRef.current = false;
+    lastInputTimeRef.current = 0;
+    inputLengthRef.current = 0;
+    
     if (inputRef.current) {
       inputRef.current.focus();
     }
@@ -238,22 +303,52 @@ const App: React.FC = () => {
    * Handle input change with automatic submission detection
    * Barcode scanners typically input data very quickly, so we'll use a timer
    * to detect when input has stopped and automatically submit
+   * Manual input will only submit when Enter is pressed
    */
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
+    const currentTime = Date.now();
+    const timeSinceLastInput = currentTime - lastInputTimeRef.current;
+    
     setItemId(newValue);
-
+    
     // Clear any existing timeout
     if (scanTimeoutRef.current) {
       clearTimeout(scanTimeoutRef.current);
     }
 
-    // Set a new timeout to auto-submit after a short delay
-    // This allows for barcode scanner input which is typically very fast
+    // Detect if this looks like barcode scanner input:
+    // - Very fast typing (less than 30ms between characters)
+    // - OR significant length increase (pasted/scanned content)
+    const isFastInput = timeSinceLastInput < 30 && newValue.length > inputLengthRef.current;
+    const isLengthJump = newValue.length - inputLengthRef.current > 5;
+    const isProbablyScanner = isFastInput || isLengthJump;
+    
+    // Mark if scanner input is detected
+    if (isProbablyScanner) {
+      scannerDetectedRef.current = true;
+    }
+    
+    // Update refs
+    lastInputTimeRef.current = currentTime;
+    inputLengthRef.current = newValue.length;
+
+    // Set timeout to submit when input stops (for both scanner and potential scanner input)
     if (newValue.trim()) {
       scanTimeoutRef.current = setTimeout(() => {
-        handleScan();
-      }, 100); // 100ms delay - fast enough for scanners, slow enough for manual typing
+        // Only auto-submit if scanner was detected during this input session
+        if (scannerDetectedRef.current) {
+          // Get the current value directly from the input field, not from state
+          const currentInputValue = inputRef.current?.value || '';
+          if (currentInputValue.trim()) {
+            handleScanWithValue(currentInputValue.trim());
+          }
+          scannerDetectedRef.current = false; // Reset for next input
+        }
+      }, 150); // Increased delay to ensure all characters are captured
+    } else {
+      // Reset scanner detection when input is cleared
+      scannerDetectedRef.current = false;
     }
   };
 
@@ -266,6 +361,7 @@ const App: React.FC = () => {
       if (scanTimeoutRef.current) {
         clearTimeout(scanTimeoutRef.current);
       }
+      scannerDetectedRef.current = false; // Reset scanner detection
       handleScan();
     }
   };
@@ -306,15 +402,29 @@ const App: React.FC = () => {
           alignItems: 'center',
           marginBottom: '30px'
         }}>
-          <h1 style={{
-            fontSize: '24px',
-            fontWeight: 'bold',
-            textTransform: 'uppercase',
-            letterSpacing: '2px',
-            margin: 0
-          }}>
-            HARRY'S LILLA LAGER
-          </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <img
+              src={logoSvg}
+              alt="ånej"
+              style={{
+              height: '48px',
+              width: '48px',
+              objectFit: 'contain',
+              borderRadius: '8px',
+              border: '2px solid #000',
+              background: '#fff'
+              }}
+            />
+            <h1 style={{
+              fontSize: '24px',
+              fontWeight: 'bold',
+              textTransform: 'uppercase',
+              letterSpacing: '2px',
+              margin: 0
+            }}>
+              HARRY'S LILLA LAGER
+            </h1>
+            </div>
           
           <div style={{ display: 'flex', gap: '10px' }}>
             <button
@@ -370,7 +480,7 @@ const App: React.FC = () => {
             value={itemId}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder="SCANNA ELLER SKRIV IN ARTIKEL ID..."
+            placeholder="SCANNA ELLER SKRIV IN ARTIKEL ID (TRYCK ENTER)..."
             autoFocus
             style={{
               width: '100%',
@@ -470,7 +580,8 @@ const App: React.FC = () => {
                       padding: '15px 20px',
                       color: '#faf8f5',
                       fontWeight: 'bold',
-                      fontSize: '16px'
+                      fontSize: '16px',
+                      textTransform: 'uppercase'
                     }}>
                       {article.id}
                     </td>
