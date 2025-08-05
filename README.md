@@ -1,74 +1,106 @@
-# Surgical Inventory System
+tauri.conf.json
+Set decorations to false in your tauri.conf.json:
 
-A headless surgical inventory system that logs barcode scans from sterile storage, built with Electron, React, TypeScript, and SQLite.
+tauri.conf.json
+"tauri": {
+  "windows": [
+    {
+      "decorations": false
+    }
+  ]
+}
 
-## Features
+Permissions
+Add window permissions in capability file.
 
-- **Headless Operation**: Runs silently in the background/system tray
-- **Barcode Trigger Activation**: Activated by scanning trigger barcodes (e.g., SCAN_START)
-- **Auto-closing Scan Window**: Opens minimal scan window, auto-closes after configurable inactivity
-- **Item Tracking**: Logs check-out (leaving sterile storage) and check-in (returning from sterilization)
-- **Automatic Categorization**: Items categorized by barcode prefix (e.g., KÄKX = Käkkirurgi)
-- **Persistent Storage**: SQLite database for reliable data storage
-- **Export Capabilities**: Export data as CSV/JSON for Excel or backup
-- **Wireless Scanner Support**: Works with wireless barcode scanners (keyboard emulation)
-- **Global Hotkeys**: Fallback activation via keyboard shortcuts
-- **Configurable Settings**: Adjustable inactivity timeout and categories
+By default, all plugin commands are blocked and cannot be accessed. You must define a list of permissions in your capabilities configuration.
 
-## Prerequisites
+See the Capabilities Overview for more information and the step by step guide to use plugin permissions.
 
-- Node.js (v18 or higher)
-- npm or yarn
-- Windows, macOS, or Linux
+src-tauri/capabilities/default.json
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-capability",
+  "description": "Capability for the main window",
+  "windows": ["main"],
+  "permissions": ["core:window:default", "core:window:allow-start-dragging"]
+}
 
-## Installation
+Permission	Description
+core:window:default	Default permissions for the plugin. Except window:allow-start-dragging.
+core:window:allow-close	Enables the close command without any pre-configured scope.
+core:window:allow-minimize	Enables the minimize command without any pre-configured scope.
+core:window:allow-start-dragging	Enables the start_dragging command without any pre-configured scope.
+core:window:allow-toggle-maximize	Enables the toggle_maximize command without any pre-configured scope.
+core:window:allow-internal-toggle-maximize	Enables the internal_toggle_maximize command without any pre-configured scope.
+CSS
+Add this CSS sample to keep it at the top of the screen and style the buttons:
 
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   cd surgical-inventory-system
-   ```
+.titlebar {
+  height: 30px;
+  background: #329ea3;
+  user-select: none;
+  display: flex;
+  justify-content: flex-end;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+.titlebar-button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 30px;
+  height: 30px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.titlebar-button:hover {
+  background: #5bbec3;
+}
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+HTML
+Put this at the top of your <body> tag:
 
-## Development
+<div data-tauri-drag-region class="titlebar">
+  <div class="titlebar-button" id="titlebar-minimize">
+    <img
+      src="https://api.iconify.design/mdi:window-minimize.svg"
+      alt="minimize"
+    />
+  </div>
+  <div class="titlebar-button" id="titlebar-maximize">
+    <img
+      src="https://api.iconify.design/mdi:window-maximize.svg"
+      alt="maximize"
+    />
+  </div>
+  <div class="titlebar-button" id="titlebar-close">
+    <img src="https://api.iconify.design/mdi:close.svg" alt="close" />
+  </div>
+</div>
 
-Run the application in development mode:
+Note that you may need to move the rest of your content down so that the titlebar doesn’t cover it.
 
-```bash
-npm run dev
-```
+JavaScript
+Use this code snippet to make the buttons work:
 
-This will start both the Vite development server and Electron simultaneously.
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
-## Building
+// when using `"withGlobalTauri": true`, you may use
+// const { getCurrentWindow } = window.__TAURI__.window;
 
-Build the application for production:
+const appWindow = getCurrentWindow();
 
-```bash
-npm run build
-```
+document
+  .getElementById('titlebar-minimize')
+  ?.addEventListener('click', () => appWindow.minimize());
+document
+  .getElementById('titlebar-maximize')
+  ?.addEventListener('click', () => appWindow.toggleMaximize());
+document
+  .getElementById('titlebar-close')
+  ?.addEventListener('click', () => appWindow.close());
 
-Build for Windows distribution:
-
-```bash
-npm run build:win
-```
-
-## Default Categories
-
-- **KÄKX** - Käkkirurgi (Jaw Surgery)
-- **ORTO** - Ortopedi (Orthopedics)
-- **CARD** - Kardio (Cardiovascular)
-- **NEUR** - Neuro (Neurosurgery)
-- **ALLM** - Allmän Kirurgi (General Surgery)
-- **PLAS** - Plastik (Plastic Surgery)
-- **UROL** - Urologi (Urology)
-- **GYNE** - Gynekologi (Gynecology)
-    ...reactDom.configs.recommended.rules,
-  },
-})
-```
+Note that if you are using a Rust-based frontend, you can copy the code above into a <script> element in your index.html file.
