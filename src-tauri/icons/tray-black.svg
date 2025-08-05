@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-  <!-- Simple package/box icon for inventory system -->
-  <path d="M3 4h18v2L12 8 3 6V4z" fill="#000000"/>
-  <path d="M3 8v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8l-9 2-9-2z" fill="#000000"/>
-  <path d="M11 10v8h2v-8l-1-.25L11 10z" fill="#000000"/>
-</svg>

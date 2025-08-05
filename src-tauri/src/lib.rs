@@ -21,11 +21,6 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, State, Emitter, Manager};
 use serde_json::Value;
 
-#[cfg(target_os = "windows")]
-use window_vibrancy::clear_mica;
-
-#[cfg(target_os = "macos")]
-use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
 
 // Application State
 struct AppState {
@@ -349,54 +344,6 @@ fn apply_window_effects(app: AppHandle, window_label: String) -> Result<(), Stri
     }
 }
 
-#[tauri::command]
-fn clear_window_effects(app: AppHandle, window_label: String) -> Result<(), String> {
-    if let Some(window) = app.webview_windows().get(&window_label) {
-        #[cfg(target_os = "windows")]
-        {
-            use window_vibrancy::clear_blur;
-            clear_blur(&window)
-                .map_err(|e| format!("Failed to clear blur: {}", e))?;
-        }
-        
-        #[cfg(target_os = "macos")]
-        {
-            use window_vibrancy::clear_vibrancy;
-            clear_vibrancy(&window)
-                .map_err(|e| format!("Failed to clear vibrancy: {}", e))?;
-        }
-        
-        Ok(())
-    } else {
-        Err(format!("Window '{}' not found", window_label))
-    }
-}
-
-// Apply window vibrancy effects
-fn apply_window_vibrancy(app: &AppHandle) {
-    let windows = app.webview_windows();
-    
-    for (label, window) in windows {
-        #[cfg(target_os = "macos")]
-        {
-            if let Err(e) = apply_vibrancy(&window, NSVisualEffectMaterial::HudWindow, None, None) {
-                eprintln!("Failed to apply vibrancy to window '{}': {}", label, e);
-            } else {
-                println!("Successfully applied vibrancy to window '{}'", label);
-            }
-        }
-        
-        #[cfg(target_os = "windows")]
-        {
-            if let Err(e) = clear_mica(&window,) {
-                eprintln!("Failed to apply blur to window '{}': {}", label, e);
-            } else {
-                println!("Successfully applied blur to window '{}'", label);
-            }
-        }
-    }
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -497,9 +444,6 @@ pub fn run() {
             close_serial_scanner,
             show_quick_scan_popup,
             
-            // Window effects commands
-            apply_window_effects,
-            clear_window_effects
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

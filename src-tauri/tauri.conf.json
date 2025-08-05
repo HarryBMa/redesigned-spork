@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Harry's Lilla Lager - Adminpanel",
+        "title": "Harry's Lilla Lager",
         "width": 800,
         "height": 600,
         "minWidth": 600,
@@ -30,7 +30,7 @@
         "title": "Snabbscanning",
         "width": 400,
         "height": 300,
-        "decorations": true,
+        "decorations": false,
         "resizable": false,
         "alwaysOnTop": true,
         "skipTaskbar": false,
