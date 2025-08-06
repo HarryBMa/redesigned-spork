@@ -7,6 +7,7 @@ mod alert;
 mod tray;
 mod serial_scanner;
 mod printer;
+mod theme;
 
 use database::{Database, ScanLog, DepartmentMapping};
 use logger::Logger;
@@ -319,29 +320,22 @@ fn close_serial_scanner(state: State<AppState>) {
 }
 
 #[tauri::command]
-fn show_quick_scan_popup(app: AppHandle) -> Result<(), String> {
-    TrayManager::show_quick_scan_popup(&app).map_err(|e| e.to_string())
+fn refresh_tray_icon(app: AppHandle) -> Result<(), String> {
+    TrayManager::refresh_tray_icon(&app).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn apply_window_effects(app: AppHandle, window_label: String) -> Result<(), String> {
-    if let Some(window) = app.webview_windows().get(&window_label) {
-        #[cfg(target_os = "macos")]
-        {
-            apply_vibrancy(&window, NSVisualEffectMaterial::HudWindow, None, None)
-                .map_err(|e| format!("Failed to apply vibrancy: {}", e))?;
-        }
-        
-        #[cfg(target_os = "windows")]
-        {
-            clear_mica(&window,)
-                .map_err(|e| format!("Failed to apply blur: {}", e))?;
-        }
-        
-        Ok(())
-    } else {
-        Err(format!("Window '{}' not found", window_label))
+fn get_current_theme() -> String {
+    let theme = crate::theme::SystemTheme::detect();
+    match theme {
+        crate::theme::SystemTheme::Light => "light".to_string(),
+        crate::theme::SystemTheme::Dark => "dark".to_string(),
     }
+}
+
+#[tauri::command]
+fn show_quick_scan_popup(app: AppHandle) -> Result<(), String> {
+    TrayManager::show_quick_scan_popup(&app).map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -357,9 +351,7 @@ pub fn run() {
             }
         })        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            // Apply window vibrancy effects
-            apply_window_vibrancy(app.handle());
-            
+     
             // Setup system tray
             if let Err(e) = TrayManager::setup_system_tray(app.handle()) {
                 eprintln!("Failed to setup system tray: {}", e);
@@ -443,6 +435,10 @@ pub fn run() {
             open_serial_scanner,
             close_serial_scanner,
             show_quick_scan_popup,
+            
+            // Theme commands
+            refresh_tray_icon,
+            get_current_theme,
             
         ])
         .run(tauri::generate_context!())

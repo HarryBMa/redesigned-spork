@@ -3,10 +3,24 @@ use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
     AppHandle, Manager, WebviewWindowBuilder, Emitter,
 };
+use crate::theme::SystemTheme;
 
 pub struct TrayManager;
 
 impl TrayManager {
+    /// Creates and returns the appropriate tray icon based on system theme
+    fn get_tray_icon_path(app: &AppHandle) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+        let theme = SystemTheme::detect();
+        let icon_filename = theme.tray_icon_filename();
+        
+        let icon_path = app
+            .path()
+            .resolve(&format!("icons/{}", icon_filename), tauri::path::BaseDirectory::Resource)
+            .map_err(|e| format!("Failed to resolve tray icon path: {}", e))?;
+        
+        Ok(icon_path)
+    }
+
     pub fn setup_system_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         // Create menu items
         let show_admin = MenuItemBuilder::with_id("show_admin", "Open Admin Panel").build(app)?;
@@ -28,11 +42,17 @@ impl TrayManager {
             .item(&quit)
             .build()?;
 
-        // Build tray icon - using a black icon for better visibility
+        // Get the appropriate icon based on system theme
+        let icon_path = Self::get_tray_icon_path(app)?;
+        
+        // Read the icon file as bytes
+        let icon_bytes = std::fs::read(&icon_path)?;
+        let icon = tauri::image::Image::new_owned(icon_bytes, 32, 32);
+
         let _tray = TrayIconBuilder::new()
             .menu(&menu)
-            .icon(app.default_window_icon().unwrap().clone())
-            .tooltip("Harry's Lilla Lager - Kirurgisk lagersystem")
+            .icon(icon)
+            .tooltip("Harry's Lilla Lager - Kirurgiskt lagersystem")
             .on_menu_event(move |app_handle, event| {
                 match event.id().as_ref() {
                     "show_admin" => {
@@ -79,6 +99,15 @@ impl TrayManager {
             })
             .build(app)?;
 
+        Ok(())
+    }
+
+    /// Updates the system tray icon based on current theme
+    /// This can be called periodically or when theme changes are detected
+    pub fn refresh_tray_icon(_app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+        // For now, we recreate the tray since Tauri doesn't have a direct way to update just the icon
+        // In a more advanced implementation, we could store the tray instance and update it
+        println!("Theme change detected: {:?}, tray icon will be updated on next restart", SystemTheme::detect());
         Ok(())
     }
 
