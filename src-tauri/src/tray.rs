@@ -13,12 +13,68 @@ impl TrayManager {
         let theme = SystemTheme::detect();
         let icon_filename = theme.tray_icon_filename();
         
-        let icon_path = app
-            .path()
-            .resolve(&format!("icons/{}", icon_filename), tauri::path::BaseDirectory::Resource)
-            .map_err(|e| format!("Failed to resolve tray icon path: {}", e))?;
+        println!("Detected system theme: {:?}, looking for icon: {}", theme, icon_filename);
         
-        Ok(icon_path)
+        // Try multiple fallback paths for different build modes
+        let possible_paths = vec![
+            format!("icons/{}", icon_filename),
+            "icons/icon.png".to_string(),
+            "icons/32x32.png".to_string(),
+        ];
+        
+        for path_str in possible_paths.iter() {
+            println!("Trying to resolve path: {}", path_str);
+            
+            if let Ok(icon_path) = app
+                .path()
+                .resolve(path_str, tauri::path::BaseDirectory::Resource) {
+                
+                println!("Resolved path: {:?}", icon_path);
+                if icon_path.exists() {
+                    println!("Using tray icon: {:?}", icon_path);
+                    return Ok(icon_path);
+                } else {
+                    println!("Path does not exist: {:?}", icon_path);
+                }
+            } else {
+                println!("Failed to resolve path: {}", path_str);
+            }
+        }
+        
+        // Last resort: try to find any .png file in the icons directory
+        if let Ok(icons_dir) = app
+            .path()
+            .resolve("icons", tauri::path::BaseDirectory::Resource) {
+            
+            println!("Searching in icons directory: {:?}", icons_dir);
+            if let Ok(entries) = std::fs::read_dir(&icons_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().and_then(|s| s.to_str()) == Some("png") {
+                        println!("Using fallback tray icon: {:?}", path);
+                        return Ok(path);
+                    }
+                }
+            }
+        }
+        
+        // Final fallback: try the executable directory
+        if let Ok(exe_dir) = std::env::current_exe().map(|p| p.parent().unwrap().to_path_buf()) {
+            let possible_exe_paths = vec![
+                exe_dir.join("icons").join(icon_filename),
+                exe_dir.join("icons").join("icon.png"),
+                exe_dir.join("icons").join("32x32.png"),
+            ];
+            
+            for path in possible_exe_paths {
+                if path.exists() {
+                    println!("Using executable directory tray icon: {:?}", path);
+                    return Ok(path);
+                }
+            }
+        }
+        
+        Err("No suitable tray icon found".into())
     }
 
     pub fn setup_system_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
@@ -43,11 +99,43 @@ impl TrayManager {
             .build()?;
 
         // Get the appropriate icon based on system theme
-        let icon_path = Self::get_tray_icon_path(app)?;
+        let icon_path = match Self::get_tray_icon_path(app) {
+            Ok(path) => {
+                println!("Successfully found tray icon: {:?}", path);
+                path
+            },
+            Err(e) => {
+                eprintln!("Warning: Could not load tray icon: {}", e);
+                println!("System tray will be disabled");
+                return Err(e);
+            }
+        };
         
         // Read the icon file as bytes
-        let icon_bytes = std::fs::read(&icon_path)?;
-        let icon = tauri::image::Image::new_owned(icon_bytes, 32, 32);
+        let icon_bytes = match std::fs::read(&icon_path) {
+            Ok(bytes) => {
+                println!("Successfully read icon file, {} bytes", bytes.len());
+                bytes
+            },
+            Err(e) => {
+                eprintln!("Warning: Failed to read tray icon file {:?}: {}", icon_path, e);
+                println!("System tray will be disabled");
+                return Err(Box::new(e));
+            }
+        };
+        
+        // Try to determine image dimensions from the file
+        let icon = if let Ok(img) = image::open(&icon_path) {
+            let width = img.width();
+            let height = img.height();
+            let rgba = img.to_rgba8().into_raw();
+            println!("Creating tray icon with image size: {}x{}", width, height);
+            tauri::image::Image::new_owned(rgba, width, height)
+        } else {
+            // Fallback: assume it's a 32x32 icon
+            println!("Creating tray icon with assumed size: 32x32");
+            tauri::image::Image::new_owned(icon_bytes, 32, 32)
+        };
 
         let _tray = TrayIconBuilder::new()
             .menu(&menu)
@@ -97,7 +185,13 @@ impl TrayManager {
                     _ => {}
                 }
             })
-            .build(app)?;
+            .build(app)
+            .map_err(|e| format!("Failed to build tray icon: {}", e))?;
+
+        println!("System tray initialized successfully");
+        
+        // Store the tray handle in the application state so it doesn't get dropped
+        // Note: Tauri manages the tray lifecycle, so we don't need to explicitly store it
 
         Ok(())
     }

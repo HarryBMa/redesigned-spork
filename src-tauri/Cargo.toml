@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
+default-run = "harrys-lilla-lager"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -13,6 +14,14 @@ edition = "2021"
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "harrys_lilla_lager_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "harrys-lilla-lager"
+path = "src/main.rs"
+
+[[bin]]
+name = "import_items"
+path = "src/import_items.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -30,6 +39,7 @@ csv = "1.3"
 tokio = { version = "1", features = ["full"] }
 regex = "1.5"
 dirs = "5.0"
+image = "0.25"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winuser", "winreg", "dwmapi"] }

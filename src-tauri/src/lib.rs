@@ -1,5 +1,5 @@
 // Surgical Inventory Tracker - Tauri Backend
-mod database;
+pub mod database;
 mod scanner;
 mod logger;
 mod export;
@@ -9,7 +9,7 @@ mod serial_scanner;
 mod printer;
 mod theme;
 
-use database::{Database, ScanLog, DepartmentMapping};
+use database::{Database, ScanLog, DepartmentMapping, Item};
 use logger::Logger;
 use scanner::Scanner;
 use export::Exporter;
@@ -197,6 +197,100 @@ fn force_check_out(state: State<AppState>, barcode: String) -> Result<Value, Str
         "action": action.action,
         "department": action.department
     }))
+}
+
+// Item management commands
+#[tauri::command]
+fn add_item(_state: State<AppState>, barcode: String, name: String) -> Result<(), String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    db.add_item(&barcode, &name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_all_items(_state: State<AppState>) -> Result<Vec<Item>, String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    db.get_all_items().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_item_name(_state: State<AppState>, barcode: String) -> Result<Option<String>, String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    db.get_item_name(&barcode).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_item(_state: State<AppState>, barcode: String) -> Result<(), String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    db.delete_item(&barcode).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn import_items_from_list(_state: State<AppState>, items: Vec<(String, String)>) -> Result<usize, String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    db.import_items_from_list(&items).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn import_items_from_text(_state: State<AppState>, text_data: String) -> Result<usize, String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    let mut items = Vec::new();
+    
+    for line in text_data.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        
+        // Split by comma, tab, or multiple spaces
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 2 {
+            let mut barcode = parts[0].to_string();
+            let mut name = parts[1..].join(" ");
+            
+            // Fix missing X in prefix - check if barcode starts with ÖNH and doesn't have X
+            if barcode.starts_with("ÖNH") && !barcode.starts_with("ÖNHX") {
+                barcode = barcode.replace("ÖNH", "ÖNHX");
+            }
+            
+            // Remove "galler" from name if present
+            name = name.replace("galler", "").trim().to_string();
+            
+            // Skip if name is empty after cleaning
+            if !name.is_empty() {
+                items.push((barcode, name));
+            }
+        }
+    }
+    
+    db.import_items_from_list(&items).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn import_items_from_csv_file(_state: State<AppState>, file_path: String) -> Result<usize, String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    let mut items = Vec::new();
+    
+    // Read CSV file
+    let mut rdr = csv::Reader::from_path(&file_path).map_err(|e| format!("Failed to read CSV file: {}", e))?;
+    
+    for result in rdr.records() {
+        let record = result.map_err(|e| format!("Failed to parse CSV record: {}", e))?;
+        
+        if record.len() >= 2 {
+            let barcode = record[0].trim().to_string();
+            let name = record[1].trim().to_string();
+            
+            if !barcode.is_empty() && !name.is_empty() {
+                items.push((barcode, name));
+            }
+        }
+    }
+    
+    if items.is_empty() {
+        return Err("No valid items found in CSV file".to_string());
+    }
+    
+    db.import_items_from_list(&items).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -430,6 +524,15 @@ pub fn run() {
             get_department_mappings,
             set_department_mapping,
             delete_department_mapping,
+            
+            // Item management commands
+            add_item,
+            get_all_items,
+            get_item_name,
+            delete_item,
+            import_items_from_list,
+            import_items_from_text,
+            import_items_from_csv_file,
             
             // Serial scanner commands
             open_serial_scanner,

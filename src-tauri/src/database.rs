@@ -10,6 +10,7 @@ pub struct ScanLog {
     pub barcode: String,
     pub action: String, // "check-in" or "check-out"
     pub department: Option<String>,
+    pub item_name: Option<String>, // Display name for the item
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,6 +23,12 @@ pub struct Settings {
 pub struct DepartmentMapping {
     pub prefix: String,
     pub department: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Item {
+    pub barcode: String,
+    pub name: String,
 }
 
 pub struct Database {
@@ -81,6 +88,15 @@ impl Database {
             [],
         )?;
 
+        // Create items table for item names
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS items (
+                barcode TEXT PRIMARY KEY,
+                name TEXT NOT NULL
+            )",
+            [],
+        )?;
+
         // Insert default department mappings only if table is empty
         let count: i64 = self.conn.query_row(
             "SELECT COUNT(*) FROM department_mappings",
@@ -131,14 +147,18 @@ impl Database {
 
         let mut stmt = self.conn.prepare(&sql)?;
         let logs = stmt.query_map([], |row| {
+            let barcode: String = row.get(2)?;
+            let item_name = self.get_item_name(&barcode).unwrap_or(None);
+            
             Ok(ScanLog {
                 id: Some(row.get(0)?),
                 timestamp: DateTime::parse_from_rfc3339(&row.get::<_, String>(1)?)
                     .unwrap_or_else(|_| Local::now().into())
                     .with_timezone(&Local),
-                barcode: row.get(2)?,
+                barcode,
                 action: row.get(3)?,
                 department: row.get(4)?,
+                item_name,
             })
         })?;
 
@@ -165,14 +185,18 @@ impl Database {
         )?;
 
         let logs = stmt.query_map([], |row| {
+            let barcode: String = row.get(2)?;
+            let item_name = self.get_item_name(&barcode).unwrap_or(None);
+            
             Ok(ScanLog {
                 id: Some(row.get(0)?),
                 timestamp: DateTime::parse_from_rfc3339(&row.get::<_, String>(1)?)
                     .unwrap_or_else(|_| Local::now().into())
                     .with_timezone(&Local),
-                barcode: row.get(2)?,
+                barcode,
                 action: row.get(3)?,
                 department: row.get(4)?,
+                item_name,
             })
         })?;
 
@@ -283,6 +307,61 @@ impl Database {
         } else {
             Ok(None)
         }
+    }
+
+    // Items management methods
+    pub fn add_item(&self, barcode: &str, name: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO items (barcode, name) VALUES (?1, ?2)",
+            params![barcode, name],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_item_name(&self, barcode: &str) -> Result<Option<String>> {
+        let mut stmt = self.conn.prepare("SELECT name FROM items WHERE barcode = ?1")?;
+        let mut rows = stmt.query_map(params![barcode], |row| {
+            Ok(row.get::<_, String>(0)?)
+        })?;
+
+        if let Some(row) = rows.next() {
+            Ok(Some(row?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn get_all_items(&self) -> Result<Vec<Item>> {
+        let mut stmt = self.conn.prepare("SELECT barcode, name FROM items ORDER BY name")?;
+        let items = stmt.query_map([], |row| {
+            Ok(Item {
+                barcode: row.get(0)?,
+                name: row.get(1)?,
+            })
+        })?;
+
+        let mut result = Vec::new();
+        for item in items {
+            result.push(item?);
+        }
+        Ok(result)
+    }
+
+    pub fn delete_item(&self, barcode: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM items WHERE barcode = ?1",
+            params![barcode],
+        )?;
+        Ok(())
+    }
+
+    pub fn import_items_from_list(&self, items: &[(String, String)]) -> Result<usize> {
+        let mut imported_count = 0;
+        for (barcode, name) in items {
+            self.add_item(barcode, name)?;
+            imported_count += 1;
+        }
+        Ok(imported_count)
     }
 
     /// Clean up old logs to prevent infinite database growth

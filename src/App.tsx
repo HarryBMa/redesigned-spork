@@ -18,6 +18,7 @@ interface ScanLog {
   barcode: string;
   action: string;
   department?: string;
+  item_name?: string; // Display name for the item
 }
 
 interface DepartmentMapping {
@@ -55,6 +56,12 @@ const MainInventoryApp: React.FC = () => {
   const [newPrefix, setNewPrefix] = useState('');
   const [newDepartment, setNewDepartment] = useState('');
   const [showBarcodeGenerator, setShowBarcodeGenerator] = useState(false);
+
+  // Item management state
+  const [showItemManagement, setShowItemManagement] = useState(false);
+  const [newItemBarcode, setNewItemBarcode] = useState('');
+  const [newItemName, setNewItemName] = useState('');
+  const [allItems, setAllItems] = useState<any[]>([]);
 
   // State for toast notifications
   const [toast, setToast] = useState<{
@@ -124,6 +131,11 @@ const MainInventoryApp: React.FC = () => {
         timestamp: new Date(item.timestamp)
       }));
       setArticles(convertedArticles);
+
+      // Load items if admin is unlocked
+      if (isAdminUnlocked) {
+        await loadItems();
+      }
     } catch (error) {
       console.error('Error loading data:', error);
       // Fallback to local state if Tauri backend not available
@@ -280,6 +292,8 @@ const MainInventoryApp: React.FC = () => {
     if (adminPassword === 'demoHH') {
       setIsAdminUnlocked(true);
       setAdminPassword('');
+      // Load items when admin unlocks
+      await loadItems();
     } else {
       showToast('Incorrect password. Please try again.', 'error');
       setAdminPassword('');
@@ -304,6 +318,107 @@ const MainInventoryApp: React.FC = () => {
     } catch (error) {
       console.error('Error adding department mapping:', error);
       showToast('Failed to add department mapping', 'error');
+    }
+  };
+
+  /**
+   * Add a single item manually
+   */
+  const handleAddItem = async () => {
+    if (!newItemBarcode.trim() || !newItemName.trim()) {
+      showToast('Both barcode and name are required', 'error');
+      return;
+    }
+    
+    try {
+      await invoke('add_item', { 
+        barcode: newItemBarcode.toUpperCase().trim(), 
+        name: newItemName.trim() 
+      });
+      setNewItemBarcode('');
+      setNewItemName('');
+      await loadItems();
+      showToast('Item added successfully', 'success');
+    } catch (error) {
+      console.error('Error adding item:', error);
+      showToast('Failed to add item', 'error');
+    }
+  };
+
+  /**
+   * Load all items from database
+   */
+  const loadItems = async () => {
+    try {
+      const items = await invoke('get_all_items');
+      setAllItems(items as any[]);
+    } catch (error) {
+      console.error('Error loading items:', error);
+    }
+  };
+
+  /**
+   * Handle CSV file upload for bulk item import
+   */
+  const handleCsvUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      showToast('Please select a CSV file', 'error');
+      return;
+    }
+
+    try {
+      // For web, we'll read the file content and parse it manually
+      const text = await file.text();
+      const lines = text.split('\n');
+      let importCount = 0;
+
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine || trimmedLine.startsWith('#')) continue; // Skip empty lines and comments
+        
+        const parts = trimmedLine.split(',');
+        if (parts.length >= 2) {
+          const barcode = parts[0].trim().replace(/"/g, ''); // Remove quotes
+          const name = parts[1].trim().replace(/"/g, '');
+          
+          if (barcode && name) {
+            try {
+              await invoke('add_item', { barcode: barcode.toUpperCase(), name });
+              importCount++;
+            } catch (error) {
+              console.warn(`Failed to import item ${barcode}: ${error}`);
+            }
+          }
+        }
+      }
+
+      await loadItems();
+      showToast(`Successfully imported ${importCount} items`, 'success');
+    } catch (error) {
+      console.error('Error processing CSV file:', error);
+      showToast('Failed to process CSV file', 'error');
+    }
+
+    // Reset file input
+    event.target.value = '';
+  };
+
+  /**
+   * Delete an item
+   */
+  const handleDeleteItem = async (barcode: string) => {
+    if (!confirm(`Are you sure you want to delete item ${barcode}?`)) return;
+    
+    try {
+      await invoke('delete_item', { barcode });
+      await loadItems();
+      showToast('Item deleted successfully', 'success');
+    } catch (error) {
+      console.error('Error deleting item:', error);
+      showToast('Failed to delete item', 'error');
     }
   };
 
@@ -570,7 +685,7 @@ const MainInventoryApp: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {articles.length === 0 ? (
+              {checkedOutItems.length === 0 ? (
                 <tr style={{
                   borderBottom: '1px solid #333'
                 }}>
@@ -590,9 +705,9 @@ const MainInventoryApp: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                articles.map((article, index) => (
+                checkedOutItems.map((item, index) => (
                   <tr
-                    key={`${article.id}-${article.timestamp.getTime()}`}
+                    key={`${item.barcode}-${item.id}`}
                     style={{
                       borderBottom: '1px solid #333',
                       backgroundColor: index % 2 === 0 ? '#000' : '#111'
@@ -605,14 +720,25 @@ const MainInventoryApp: React.FC = () => {
                       fontSize: '16px',
                       textTransform: 'uppercase'
                     }}>
-                      {article.id}
+                      <div>{item.barcode}</div>
+                      {item.item_name && (
+                        <div style={{
+                          fontSize: '12px',
+                          color: '#4ade80',
+                          textTransform: 'none',
+                          fontWeight: 'normal',
+                          marginTop: '2px'
+                        }}>
+                          {item.item_name}
+                        </div>
+                      )}
                     </td>
                     <td style={{
                       padding: '15px 20px',
                       color: '#ccc',
                       fontSize: '14px'
                     }}>
-                      {formatTimestamp(article.timestamp)}
+                      {formatTimestamp(new Date(item.timestamp))}
                     </td>
                   </tr>
                 ))
@@ -865,6 +991,25 @@ const MainInventoryApp: React.FC = () => {
                     <QrCode style={{ width: '14px', height: '14px', marginRight: '5px' }} />
                     GENERATE CODES
                   </button>
+
+                  <button
+                    onClick={() => setShowItemManagement(true)}
+                    style={{
+                      padding: '10px 15px',
+                      fontSize: '12px',
+                      fontFamily: '"Courier New", monospace',
+                      border: '2px solid #000',
+                      backgroundColor: '#8b5cf6',
+                      color: '#fff',
+                      cursor: 'pointer',
+                      textTransform: 'uppercase',
+                      letterSpacing: '1px',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    <Plus style={{ width: '14px', height: '14px', marginRight: '5px' }} />
+                    MANAGE ITEMS
+                  </button>
                 </div>
 
                 {/* Items Summary */}
@@ -887,6 +1032,7 @@ const MainInventoryApp: React.FC = () => {
                     <div>CHECKED OUT ITEMS: {checkedOutItems.length}</div>
                     <div>RECENT LOGS: {recentLogs.length}</div>
                     <div>DEPARTMENT MAPPINGS: {departmentMappings.length}</div>
+                    <div>TOTAL ITEMS: {allItems.length}</div>
                   </div>
                 </div>
               </div>
@@ -948,6 +1094,216 @@ const MainInventoryApp: React.FC = () => {
               </button>
             </div>
             <BarcodeGenerator />
+          </div>
+        </div>
+      )}
+
+      {/* Item Management Modal */}
+      {showItemManagement && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1001
+        }}>
+          <div style={{
+            backgroundColor: '#faf8f5',
+            border: '3px solid #000',
+            padding: '20px',
+            maxWidth: '800px',
+            width: '90%',
+            maxHeight: '80vh',
+            overflow: 'auto'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px'
+            }}>
+              <h3 style={{
+                fontSize: '18px',
+                fontWeight: 'bold',
+                textTransform: 'uppercase',
+                letterSpacing: '1px',
+                margin: 0
+              }}>
+                ITEM MANAGEMENT
+              </h3>
+              <button
+                onClick={() => setShowItemManagement(false)}
+                style={{
+                  padding: '5px 10px',
+                  fontSize: '14px',
+                  fontFamily: '"Courier New", monospace',
+                  border: '2px solid #000',
+                  backgroundColor: '#ef4444',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontWeight: 'bold'
+                }}
+              >
+                <X style={{ width: '16px', height: '16px' }} />
+              </button>
+            </div>
+
+            {/* Add Single Item */}
+            <div style={{ marginBottom: '25px' }}>
+              <h4 style={{
+                fontSize: '14px',
+                fontWeight: 'bold',
+                textTransform: 'uppercase',
+                letterSpacing: '1px',
+                marginBottom: '10px'
+              }}>
+                ADD SINGLE ITEM
+              </h4>
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                <input
+                  type="text"
+                  value={newItemBarcode}
+                  onChange={(e) => setNewItemBarcode(e.target.value)}
+                  placeholder="BARCODE"
+                  style={{
+                    flex: 1,
+                    padding: '8px',
+                    fontSize: '14px',
+                    fontFamily: '"Courier New", monospace',
+                    border: '2px solid #000',
+                    backgroundColor: '#fff',
+                    outline: 'none',
+                    textTransform: 'uppercase'
+                  }}
+                />
+                <input
+                  type="text"
+                  value={newItemName}
+                  onChange={(e) => setNewItemName(e.target.value)}
+                  placeholder="ITEM NAME"
+                  style={{
+                    flex: 2,
+                    padding: '8px',
+                    fontSize: '14px',
+                    fontFamily: '"Courier New", monospace',
+                    border: '2px solid #000',
+                    backgroundColor: '#fff',
+                    outline: 'none'
+                  }}
+                />
+                <button
+                  onClick={handleAddItem}
+                  style={{
+                    padding: '8px 15px',
+                    fontSize: '12px',
+                    fontFamily: '"Courier New", monospace',
+                    border: '2px solid #000',
+                    backgroundColor: '#4ade80',
+                    color: '#000',
+                    cursor: 'pointer',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  ADD
+                </button>
+              </div>
+            </div>
+
+            {/* Bulk Import from CSV */}
+            <div style={{ marginBottom: '25px' }}>
+              <h4 style={{
+                fontSize: '14px',
+                fontWeight: 'bold',
+                textTransform: 'uppercase',
+                letterSpacing: '1px',
+                marginBottom: '10px'
+              }}>
+                BULK IMPORT FROM CSV
+              </h4>
+              <div style={{ marginBottom: '10px' }}>
+                <p style={{ fontSize: '12px', marginBottom: '5px' }}>
+                  CSV format: First column = Barcode, Second column = Name
+                </p>
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleCsvUpload}
+                  style={{
+                    padding: '8px',
+                    fontSize: '14px',
+                    fontFamily: '"Courier New", monospace',
+                    border: '2px solid #000',
+                    backgroundColor: '#fff',
+                    width: '100%'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Current Items List */}
+            <div>
+              <h4 style={{
+                fontSize: '14px',
+                fontWeight: 'bold',
+                textTransform: 'uppercase',
+                letterSpacing: '1px',
+                marginBottom: '10px'
+              }}>
+                CURRENT ITEMS ({allItems.length})
+              </h4>
+              <div style={{ 
+                maxHeight: '300px', 
+                overflow: 'auto',
+                border: '2px solid #000',
+                backgroundColor: '#000',
+                color: '#faf8f5'
+              }}>
+                {allItems.length === 0 ? (
+                  <div style={{ padding: '20px', textAlign: 'center' }}>
+                    No items found. Add some items to get started.
+                  </div>
+                ) : (
+                  allItems.map((item: any) => (
+                    <div
+                      key={item.barcode}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '8px 10px',
+                        borderBottom: '1px solid #333',
+                        fontSize: '12px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontWeight: 'bold' }}>{item.barcode}</span>
+                        <span style={{ opacity: 0.8 }}>{item.name}</span>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteItem(item.barcode)}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: '10px',
+                          fontFamily: '"Courier New", monospace',
+                          border: '1px solid #ef4444',
+                          backgroundColor: 'transparent',
+                          color: '#ef4444',
+                          cursor: 'pointer',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        DELETE
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
