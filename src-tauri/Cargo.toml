@@ -37,9 +37,6 @@ regex = "1.5"
 dirs = "5.0"
 image = "0.25"
 
-[target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["winuser", "winreg", "dwmapi"] }
-
 [profile.release]
 # Optimize for size and single-file deployment
 lto = true

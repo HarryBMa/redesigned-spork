@@ -7,7 +7,6 @@ mod alert;
 mod tray;
 mod serial_scanner;
 mod printer;
-mod theme;
 
 use database::{Database, ScanLog, DepartmentMapping, Item};
 use logger::Logger;
@@ -31,7 +30,8 @@ struct AppState {
 }
 
 impl AppState {
-    fn new() -> Result<Self, Box<dyn std::error::Error>> {        Ok(AppState {
+    fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(AppState {
             logger: Arc::new(Mutex::new(Logger::new()?)),
             scanner: Arc::new(Mutex::new(scanner::Scanner::new())),
             serial_scanner: Arc::new(Mutex::new(SerialScanner::new())),
@@ -161,10 +161,11 @@ fn discover_zebra_printers() -> Result<Vec<String>, String> {
 #[tauri::command]
 fn manual_scan_barcode(app: AppHandle, state: State<AppState>, barcode: String) -> Result<Value, String> {
     let mut logger = state.logger.lock().map_err(|e| e.to_string())?;
-    let action = logger.process_barcode_scan(&barcode).map_err(|e| e.to_string())?;
+    let normalized_barcode = barcode.to_uppercase();
+    let action = logger.process_barcode_scan(&normalized_barcode).map_err(|e| e.to_string())?;
     
     let result = serde_json::json!({
-        "barcode": barcode,
+        "barcode": normalized_barcode,
         "action": action.action,
         "department": action.department
     });
@@ -178,10 +179,11 @@ fn manual_scan_barcode(app: AppHandle, state: State<AppState>, barcode: String) 
 #[tauri::command]
 fn force_check_in(state: State<AppState>, barcode: String) -> Result<Value, String> {
     let mut logger = state.logger.lock().map_err(|e| e.to_string())?;
-    let action = logger.force_check_in(&barcode).map_err(|e| e.to_string())?;
+    let normalized_barcode = barcode.to_uppercase();
+    let action = logger.force_check_in(&normalized_barcode).map_err(|e| e.to_string())?;
     
     Ok(serde_json::json!({
-        "barcode": barcode,
+        "barcode": normalized_barcode,
         "action": action.action,
         "department": action.department
     }))
@@ -190,10 +192,11 @@ fn force_check_in(state: State<AppState>, barcode: String) -> Result<Value, Stri
 #[tauri::command]
 fn force_check_out(state: State<AppState>, barcode: String) -> Result<Value, String> {
     let mut logger = state.logger.lock().map_err(|e| e.to_string())?;
-    let action = logger.force_check_out(&barcode).map_err(|e| e.to_string())?;
+    let normalized_barcode = barcode.to_uppercase();
+    let action = logger.force_check_out(&normalized_barcode).map_err(|e| e.to_string())?;
     
     Ok(serde_json::json!({
-        "barcode": barcode,
+        "barcode": normalized_barcode,
         "action": action.action,
         "department": action.department
     }))
@@ -291,6 +294,42 @@ fn import_items_from_csv_file(_state: State<AppState>, file_path: String) -> Res
     }
     
     db.import_items_from_list(&items).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn import_items_from_default_file(_state: State<AppState>) -> Result<usize, String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    let mut items = Vec::new();
+    
+    // Try to read items_import.txt from the executable directory first
+    if let Ok(exe_dir) = std::env::current_exe().map(|p| p.parent().unwrap_or(std::path::Path::new(".")).to_path_buf()) {
+        let import_file = exe_dir.join("items_import.txt");
+        if import_file.exists() {
+            if let Ok(content) = std::fs::read_to_string(&import_file) {
+                for line in content.lines() {
+                    let line = line.trim();
+                    if line.is_empty() {
+                        continue;
+                    }
+                    
+                    // Split by space (first word is barcode, rest is name)
+                    let parts: Vec<&str> = line.splitn(2, ' ').collect();
+                    if parts.len() == 2 {
+                        let barcode = parts[0].to_string();
+                        let name = parts[1].to_string();
+                        items.push((barcode, name));
+                    }
+                }
+            }
+        }
+    }
+    
+    if items.is_empty() {
+        return Err("No items_import.txt file found or no valid items in file".to_string());
+    }
+    
+    let imported_count = db.import_items_from_list(&items).map_err(|e| e.to_string())?;
+    Ok(imported_count)
 }
 
 #[tauri::command]
@@ -414,20 +453,6 @@ fn close_serial_scanner(state: State<AppState>) {
 }
 
 #[tauri::command]
-fn refresh_tray_icon(app: AppHandle) -> Result<(), String> {
-    TrayManager::refresh_tray_icon(&app).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn get_current_theme() -> String {
-    let theme = crate::theme::SystemTheme::detect();
-    match theme {
-        crate::theme::SystemTheme::Light => "light".to_string(),
-        crate::theme::SystemTheme::Dark => "dark".to_string(),
-    }
-}
-
-#[tauri::command]
 fn show_quick_scan_popup(app: AppHandle) -> Result<(), String> {
     TrayManager::show_quick_scan_popup(&app).map_err(|e| e.to_string())
 }
@@ -443,7 +468,8 @@ pub fn run() {
                     std::process::exit(1);
                 }
             }
-        })        .plugin(tauri_plugin_opener::init())
+        })
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
      
             // Setup system tray
@@ -512,7 +538,6 @@ pub fn run() {
             export_logs_json,
             export_checked_out_csv,
             quick_export_checked_out,
-            quick_export_checked_out,
             
             // Alert commands
             get_overdue_items,
@@ -533,15 +558,12 @@ pub fn run() {
             import_items_from_list,
             import_items_from_text,
             import_items_from_csv_file,
+            import_items_from_default_file,
             
             // Serial scanner commands
             open_serial_scanner,
             close_serial_scanner,
             show_quick_scan_popup,
-            
-            // Theme commands
-            refresh_tray_icon,
-            get_current_theme,
             
         ])
         .run(tauri::generate_context!())

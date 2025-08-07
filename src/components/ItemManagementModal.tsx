@@ -1,5 +1,6 @@
 import React from 'react';
 import { X } from 'lucide-react';
+import { Item } from '../types';
 
 interface ItemManagementModalProps {
   showItemManagement: boolean;
@@ -10,7 +11,7 @@ interface ItemManagementModalProps {
   setNewItemName: (name: string) => void;
   handleAddItem: () => void;
   handleCsvUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  allItems: any[];
+  allItems: Item[];
   handleDeleteItem: (barcode: string) => void;
 }
 
@@ -197,7 +198,7 @@ const ItemManagementModal: React.FC<ItemManagementModalProps> = ({
                 No items found. Add some items to get started.
               </div>
             ) : (
-              allItems.map((item: any) => (
+              allItems.map((item: Item) => (
                 <div
                   key={item.barcode}
                   style={{

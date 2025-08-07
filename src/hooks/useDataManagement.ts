@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { ScanLog, DepartmentMapping } from '../types';
+import { ScanLog, DepartmentMapping, Item } from '../types';
 
 export const useDataManagement = () => {
   const [checkedOutItems, setCheckedOutItems] = useState<ScanLog[]>([]);
   const [recentLogs, setRecentLogs] = useState<ScanLog[]>([]);
   const [departmentMappings, setDepartmentMappings] = useState<DepartmentMapping[]>([]);
-  const [allItems, setAllItems] = useState<any[]>([]);
+  const [allItems, setAllItems] = useState<Item[]>([]);
 
   const loadData = async () => {
     try {
@@ -30,8 +30,8 @@ export const useDataManagement = () => {
    */
   const loadItems = async () => {
     try {
-      const items = await invoke('get_all_items');
-      setAllItems(items as any[]);
+      const items = await invoke<Item[]>('get_all_items');
+      setAllItems(items);
     } catch (error) {
       console.error('Error loading items:', error);
     }

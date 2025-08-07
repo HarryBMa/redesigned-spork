@@ -3,70 +3,43 @@ use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
     AppHandle, Manager, WebviewWindowBuilder, Emitter,
 };
-use crate::theme::SystemTheme;
 
 pub struct TrayManager;
 
 impl TrayManager {
-    /// Creates and returns the appropriate tray icon based on system theme
+    /// Gets a simple tray icon path - single icon, no theme detection
     fn get_tray_icon_path(app: &AppHandle) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
-        let theme = SystemTheme::detect();
-        let icon_filename = theme.tray_icon_filename();
+        println!("Looking for tray icon...");
         
-        println!("Detected system theme: {:?}, looking for icon: {}", theme, icon_filename);
-        
-        // Try multiple fallback paths for different build modes
+        // Simple list of possible icon paths, in order of preference
         let possible_paths = vec![
-            format!("icons/{}", icon_filename),
-            "icons/icon.png".to_string(),
-            "icons/32x32.png".to_string(),
+            "icons/icon.png",
+            "icons/32x32.png",
+            "icons/tray-icon-black.png", // Keep as fallback
         ];
         
+        // Try bundled resources first
         for path_str in possible_paths.iter() {
-            println!("Trying to resolve path: {}", path_str);
-            
             if let Ok(icon_path) = app
                 .path()
                 .resolve(path_str, tauri::path::BaseDirectory::Resource) {
                 
-                println!("Resolved path: {:?}", icon_path);
                 if icon_path.exists() {
-                    println!("Using tray icon: {:?}", icon_path);
+                    println!("Using bundled tray icon: {:?}", icon_path);
                     return Ok(icon_path);
-                } else {
-                    println!("Path does not exist: {:?}", icon_path);
-                }
-            } else {
-                println!("Failed to resolve path: {}", path_str);
-            }
-        }
-        
-        // Last resort: try to find any .png file in the icons directory
-        if let Ok(icons_dir) = app
-            .path()
-            .resolve("icons", tauri::path::BaseDirectory::Resource) {
-            
-            println!("Searching in icons directory: {:?}", icons_dir);
-            if let Ok(entries) = std::fs::read_dir(&icons_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.extension().and_then(|s| s.to_str()) == Some("png") {
-                        println!("Using fallback tray icon: {:?}", path);
-                        return Ok(path);
-                    }
                 }
             }
         }
         
-        // Final fallback: try the executable directory
+        // Try executable directory
         if let Ok(exe_dir) = std::env::current_exe().map(|p| p.parent().unwrap().to_path_buf()) {
-            let possible_exe_paths = vec![
-                exe_dir.join("icons").join(icon_filename),
+            let exe_paths = vec![
+                exe_dir.join("icon.png"),
                 exe_dir.join("icons").join("icon.png"),
                 exe_dir.join("icons").join("32x32.png"),
             ];
             
-            for path in possible_exe_paths {
+            for path in exe_paths {
                 if path.exists() {
                     println!("Using executable directory tray icon: {:?}", path);
                     return Ok(path);
@@ -74,7 +47,7 @@ impl TrayManager {
             }
         }
         
-        Err("No suitable tray icon found".into())
+        Err("No tray icon found".into())
     }
 
     pub fn setup_system_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
@@ -193,15 +166,6 @@ impl TrayManager {
         // Store the tray handle in the application state so it doesn't get dropped
         // Note: Tauri manages the tray lifecycle, so we don't need to explicitly store it
 
-        Ok(())
-    }
-
-    /// Updates the system tray icon based on current theme
-    /// This can be called periodically or when theme changes are detected
-    pub fn refresh_tray_icon(_app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-        // For now, we recreate the tray since Tauri doesn't have a direct way to update just the icon
-        // In a more advanced implementation, we could store the tray instance and update it
-        println!("Theme change detected: {:?}, tray icon will be updated on next restart", SystemTheme::detect());
         Ok(())
     }
 

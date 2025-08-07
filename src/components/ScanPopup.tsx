@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Toast } from '../types';
 
 // Simplified popup component for tray scanning
@@ -60,8 +61,15 @@ const ScanPopup: React.FC = () => {
     }
     
     // Auto-close after 3 seconds of no interaction
-    autoCloseTimeoutRef.current = setTimeout(() => {
-      window.close();
+    autoCloseTimeoutRef.current = setTimeout(async () => {
+      try {
+        const appWindow = getCurrentWindow();
+        await appWindow.close();
+      } catch (error) {
+        console.error('Error closing window:', error);
+        // Fallback to window.close() for web
+        window.close();
+      }
     }, 3000);
   };
 
@@ -74,7 +82,7 @@ const ScanPopup: React.FC = () => {
   };
 
   const handleScan = async () => {
-    const trimmedId = itemId.trim();
+    const trimmedId = itemId.trim().toUpperCase();
     if (!trimmedId) {
       showToast('Please enter a valid item ID', 'error');
       return;
@@ -97,8 +105,15 @@ const ScanPopup: React.FC = () => {
       showToast(`${result.barcode} ${actionText}${departmentText}`, 'success');
       
       // Auto-close after successful scan
-      setTimeout(() => {
-        window.close();
+      setTimeout(async () => {
+        try {
+          const appWindow = getCurrentWindow();
+          await appWindow.close();
+        } catch (error) {
+          console.error('Error closing window:', error);
+          // Fallback to window.close() for web
+          window.close();
+        }
       }, 1500);
     } catch (error) {
       console.error('Error scanning barcode:', error);
@@ -116,7 +131,7 @@ const ScanPopup: React.FC = () => {
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value;
+    const newValue = e.target.value.toUpperCase(); // Auto-uppercase input
     const currentTime = Date.now();
     const timeSinceLastInput = currentTime - lastInputTimeRef.current;
     

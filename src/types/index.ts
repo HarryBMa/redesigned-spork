@@ -19,6 +19,11 @@ export interface DepartmentMapping {
   department: string;
 }
 
+export interface Item {
+  barcode: string;
+  name: string;
+}
+
 export interface Toast {
   message: string;
   type: 'success' | 'warning' | 'error';

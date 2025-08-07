@@ -20,7 +20,7 @@ export const useScannerLogic = () => {
    */
   const handleScan = async (showToast: (message: string, type: 'success' | 'warning' | 'error') => void, loadData: () => void) => {
     // Trim whitespace and validate input
-    const trimmedId = itemId.trim();
+    const trimmedId = itemId.trim().toUpperCase();
     if (!trimmedId) {
       showToast('Please enter a valid item ID', 'error');
       return;
@@ -84,15 +84,16 @@ export const useScannerLogic = () => {
    * Integrates with Tauri backend for scanning
    */
   const handleScanWithValue = async (trimmedId: string, showToast: (message: string, type: 'success' | 'warning' | 'error') => void, loadData: () => void) => {
-    if (!trimmedId) {
+    const normalizedId = trimmedId.toUpperCase();
+    if (!normalizedId) {
       showToast('Please enter a valid item ID', 'error');
       return;
     }
 
     try {
       // Use Tauri backend for scanning if available
-      await invoke('manual_scan_barcode', { barcode: trimmedId });
-      showToast(`Item scanned: ${trimmedId}`, 'success');
+      await invoke('manual_scan_barcode', { barcode: normalizedId });
+      showToast(`Item scanned: ${normalizedId}`, 'success');
       
       // Refresh data
       loadData();
@@ -100,24 +101,24 @@ export const useScannerLogic = () => {
       console.error('Error scanning barcode:', error);
       
       // Fallback to local logic if Tauri backend not available
-      const existingItemIndex = articles.findIndex(article => article.id === trimmedId);
+      const existingItemIndex = articles.findIndex(article => article.id === normalizedId);
       
       if (existingItemIndex !== -1) {
         // Item exists - remove it from the list
         setArticles(prevArticles => 
-          prevArticles.filter(article => article.id !== trimmedId)
+          prevArticles.filter(article => article.id !== normalizedId)
         );
         
-        showToast(`Item removed: ${trimmedId}`, 'warning');
+        showToast(`Item removed: ${normalizedId}`, 'warning');
       } else {
         // Item doesn't exist - add it to the list
         const newArticle: Article = {
-          id: trimmedId,
+          id: normalizedId,
           timestamp: new Date()
         };
         
         setArticles(prevArticles => [newArticle, ...prevArticles]);
-        showToast(`Item added: ${trimmedId}`, 'success');
+        showToast(`Item added: ${normalizedId}`, 'success');
       }
     }
     
@@ -141,7 +142,7 @@ export const useScannerLogic = () => {
    * Manual input will only submit when Enter is pressed
    */
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>, showToast: (message: string, type: 'success' | 'warning' | 'error') => void, loadData: () => void) => {
-    const newValue = e.target.value;
+    const newValue = e.target.value.toUpperCase(); // Auto-uppercase input
     const currentTime = Date.now();
     const timeSinceLastInput = currentTime - lastInputTimeRef.current;
     

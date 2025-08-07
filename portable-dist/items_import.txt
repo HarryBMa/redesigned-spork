@@ -1,0 +1,77 @@
+KÄKX001 Käkled
+KÄKX002 Wiredriver med sladd
+KÄKX003 Crista/Tibia
+KÄKX005 Benkvarn Stor
+KÄKX006 Benkvarn Liten
+KÄKX007 Martin 2.0+2.3
+KÄKX008 Piezo Electric system
+KÄKX009 Troakar
+KÄKX011 Matrix Recon instrument
+KÄKX016 Bukfettstagning
+KÄKX017 Grund Käkanomali
+KÄKX018 Lambå
+KÄKX019 V-stycken lång
+KÄKX020 Fraktur
+KÄKX021 Le Fort 1/Sned Ramus
+KÄKX022 Le Fort 1/ Sagsplit
+KÄKX023 Cysta
+KÄKX025 Borrslang Stryker
+KÄKX028 Ben Transplantation
+KÄKX029 Borrslang Stryker utan såg
+KÄKX030 Käkledsprotes
+KÄKX032 Fräs Saber Stryker
+KÄKX035 Cysta extraoral entrè
+KÄKX036 Matrix midface Ortognat
+KÄKX037 Matrix mandibel Käk Fraktur
+KÄKX041 Piezo Grå
+KÄKX042 Piezo svart
+KÄKX907 låne ledprotes/i sterilt närförråd
+ÖNHX001 Mjukdel stort
+ÖNHX002 Mjukdel litet
+ÖNHX003 Munhåla
+ÖNHX004 Näsplastik
+ÖNHX005 Fess
+ÖNHX006 Fess barn
+ÖNHX007 Mejslar näsa
+ÖNHX008 Grund Öron
+ÖNHX009 Mikro Öron
+ÖNHX010 Plastik
+ÖNHX012 Stapedotomi
+ÖNHX013 Tracheotomi //AKUT//
+ÖNHX014 Matrix Midface Instrument
+ÖNHX017 Grund Hypofys
+ÖNHX019 Mikro Hypofys
+ÖNHX020 Brachykateter inläggning
+ÖNHX021 Fraktur Ansikte
+ÖNHX024 Bentagning
+ÖNHX032 Tonsill
+ÖNHX035 Shaver Medtronic M4
+ÖNHX040 Mejslar Öron
+ÖNHX041 Dermatoma Zimmer Air
+ÖNHX046 Borr Stylus Medtronic
+ÖNHX047 Mesh skin graft
+ÖNHX049 Fusion navigator stort
+ÖNHX050 Mikro Lambå
+ÖNHX051 Venringar
+ÖNHX054 ÖNH Fibulotagning tillägg
+ÖNHX057 ÖNH Öro-, Pharyngo-, Laryngoskop
+ÖNHX058 ÖNH Videolaryngoskop STORZ
+ÖNHX061 borr M5 microdebrider
+ÖNHX064 MLS
+ÖNHX065 stans stapes punch
+ÖNHX066 Korkskruv
+ÖNHX069 Fess tillägg
+ÖNHX072 Fusion navigator mini
+ÖNHX083 Optik Hopkins 0° 7230 AA + 30° 7
+ÖNHX085 Kärlklämmor+applikatorpincett
+ÖNHX086 optikarm Sentinel node
+ÖNHX087 Optiker Sentinel node
+ÖNHX088 Borrslang Microdrill
+ÖNHX089 Mius plaströr TMD
+ÖNHX090 Lambå avslut
+ÖNHX091 Brainlab
+ÖNHX092 Borr Stryker öron
+ÖNHX095 optik Olympus 0°+ 30° 18cm
+ÖNHX096 Orbita
+ÖNHX097 Såg Fibula Stryker
+ÖNHX099 Fess Stort
