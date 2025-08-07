@@ -76,6 +76,44 @@ export const useAdminLogic = () => {
   };
 
   /**
+   * Handle CSV file import for bulk item import (direct file input)
+   */
+  const handleCsvImport = async (file: File, loadItems: () => void, showToast: (message: string, type: 'success' | 'warning' | 'error') => void) => {
+    try {
+      // Read the file content and parse it manually
+      const text = await file.text();
+      const lines = text.split('\n');
+      let importCount = 0;
+
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine || trimmedLine.startsWith('#')) continue; // Skip empty lines and comments
+        
+        const parts = trimmedLine.split(',');
+        if (parts.length >= 2) {
+          const barcode = parts[0].trim().replace(/"/g, ''); // Remove quotes
+          const name = parts[1].trim().replace(/"/g, '');
+          
+          if (barcode && name) {
+            try {
+              await invoke('add_item', { barcode: barcode.toUpperCase(), name });
+              importCount++;
+            } catch (error) {
+              console.warn(`Failed to import item ${barcode}: ${error}`);
+            }
+          }
+        }
+      }
+
+      await loadItems();
+      showToast(`Successfully imported ${importCount} items`, 'success');
+    } catch (error) {
+      console.error('Error processing CSV file:', error);
+      showToast('Failed to process CSV file', 'error');
+    }
+  };
+
+  /**
    * Handle CSV file upload for bulk item import
    */
   const handleCsvUpload = async (event: React.ChangeEvent<HTMLInputElement>, loadItems: () => void, showToast: (message: string, type: 'success' | 'warning' | 'error') => void) => {
@@ -162,6 +200,7 @@ export const useAdminLogic = () => {
     handleAdminLogin,
     handleAddDepartmentMapping,
     handleAddItem,
+    handleCsvImport,
     handleCsvUpload,
     handleDeleteItem
   };

@@ -57,6 +57,7 @@ const MainInventoryApp: React.FC = () => {
     handleAdminLogin: adminHandleLogin,
     handleAddDepartmentMapping: adminHandleAddDepartmentMapping,
     handleAddItem: adminHandleAddItem,
+    handleCsvImport: adminHandleCsvImport,
     handleCsvUpload: adminHandleCsvUpload,
     handleDeleteItem: adminHandleDeleteItem
   } = useAdminLogic();
@@ -136,6 +137,10 @@ const MainInventoryApp: React.FC = () => {
     adminHandleCsvUpload(event, loadItems, showToast);
   };
 
+  const handleCsvImport = (file: File) => {
+    adminHandleCsvImport(file, loadItems, showToast);
+  };
+
   const handleDeleteItem = (barcode: string) => {
     adminHandleDeleteItem(barcode, loadItems, showToast);
   };
@@ -185,6 +190,7 @@ const MainInventoryApp: React.FC = () => {
         handleAddDepartmentMapping={handleAddDepartmentMapping}
         handleExport={handleExport}
         handleClearLogs={handleClearLogs}
+        handleCsvImport={handleCsvImport}
         setShowBarcodeGenerator={setShowBarcodeGenerator}
         setShowItemManagement={setShowItemManagement}
         checkedOutItems={checkedOutItems}

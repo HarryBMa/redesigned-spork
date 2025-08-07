@@ -13,15 +13,11 @@ default-run = "harrys-lilla-lager"
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "harrys_lilla_lager_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = ["staticlib", "rlib"]
 
 [[bin]]
 name = "harrys-lilla-lager"
 path = "src/main.rs"
-
-[[bin]]
-name = "import_items"
-path = "src/import_items.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -43,4 +39,11 @@ image = "0.25"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winuser", "winreg", "dwmapi"] }
+
+[profile.release]
+# Optimize for size and single-file deployment
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
 

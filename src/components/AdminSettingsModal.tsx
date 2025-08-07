@@ -1,5 +1,5 @@
-import React from 'react';
-import { X, Download, Trash2, QrCode, Plus } from 'lucide-react';
+import React, { useRef } from 'react';
+import { X, Download, Trash2, QrCode, Plus, Upload } from 'lucide-react';
 import { DepartmentMapping, ScanLog } from '../types';
 
 interface AdminSettingsModalProps {
@@ -18,6 +18,7 @@ interface AdminSettingsModalProps {
   handleAddDepartmentMapping: () => void;
   handleExport: () => void;
   handleClearLogs: () => void;
+  handleCsvImport: (file: File) => void;
   setShowBarcodeGenerator: (show: boolean) => void;
   setShowItemManagement: (show: boolean) => void;
   checkedOutItems: ScanLog[];
@@ -41,12 +42,28 @@ const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
   handleAddDepartmentMapping,
   handleExport,
   handleClearLogs,
+  handleCsvImport,
   setShowBarcodeGenerator,
   setShowItemManagement,
   checkedOutItems,
   recentLogs,
   allItems
 }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type === 'text/csv') {
+      handleCsvImport(file);
+    } else if (file) {
+      alert('Please select a CSV file');
+    }
+    // Reset the input so the same file can be selected again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   if (!showSettings) return null;
 
   return (
@@ -310,6 +327,33 @@ const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
                 <Plus style={{ width: '14px', height: '14px', marginRight: '5px' }} />
                 MANAGE ITEMS
               </button>
+
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  padding: '10px 15px',
+                  fontSize: '12px',
+                  fontFamily: '"Courier New", monospace',
+                  border: '2px solid #000',
+                  backgroundColor: '#06b6d4',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  textTransform: 'uppercase',
+                  letterSpacing: '1px',
+                  fontWeight: 'bold'
+                }}
+              >
+                <Upload style={{ width: '14px', height: '14px', marginRight: '5px' }} />
+                IMPORT CSV
+              </button>
+              
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                onChange={handleFileSelect}
+                style={{ display: 'none' }}
+              />
             </div>
 
             {/* Items Summary */}
