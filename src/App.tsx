@@ -3,6 +3,9 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { Settings, Download, Trash2, Plus, QrCode, X } from 'lucide-react';
 import BarcodeGenerator from './components/features/BarcodeGenerator';
+import InputSection from './components/InputSection';
+import InventoryTable from './components/InventoryTable';
+import AdminSettingsModal from './components/AdminSettingsModal';
 
 // Type definitions
 interface Article {
@@ -306,6 +309,7 @@ const App: React.FC = () => {
           alignItems: 'center',
           marginBottom: '30px'
         }}>
+          <img src="src/assets/logo.svg" alt="Logo" style={{ display:'flex', maxHeight: '50px', border: '2px solid #000', backgroundColor: '#ffffffff' }} />
           <h1 style={{
             fontSize: '24px',
             fontWeight: 'bold',
@@ -358,466 +362,38 @@ const App: React.FC = () => {
         </div>
         
         {/* Input Section */}
-        <div style={{
-          backgroundColor: '#faf8f5',
-          border: '3px solid #000',
-          padding: '30px',
-          marginBottom: '40px'
-        }}>
-          <input
-            ref={inputRef}
-            type="text"
-            value={itemId}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            placeholder="SCANNA ELLER SKRIV IN ARTIKEL ID..."
-            autoFocus
-            style={{
-              width: '100%',
-              padding: '15px 20px',
-              fontSize: '18px',
-              fontFamily: '"Courier New", monospace',
-              border: '3px solid #000',
-              backgroundColor: '#faf8f5',
-              color: '#000',
-              outline: 'none',
-              textTransform: 'uppercase',
-              letterSpacing: '1px',
-              textAlign: 'center'
-            }}
-          />
-        </div>
+        <InputSection
+          itemId={itemId}
+          inputRef={inputRef}
+          handleInputChange={handleInputChange}
+          handleKeyDown={handleKeyDown}
+        />
 
-        {/* Inventory List */}
-        <div style={{
-          backgroundColor: '#faf8f5',
-          border: '3px solid #000'
-        }}>
-          <div style={{
-            backgroundColor: '#000',
-            color: '#faf8f5',
-            padding: '20px',
-            fontSize: '20px',
-            fontWeight: 'bold',
-            textTransform: 'uppercase',
-            letterSpacing: '2px'
-          }}>
-          LAGER ({articles.length} ARTIKLAR)
-          </div>
-          
-          <table style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            backgroundColor: '#000'
-          }}>
-            <thead style={{
-              backgroundColor: '#000',
-              color: '#faf8f5'
-            }}>
-              <tr>
-                <th style={{
-                  padding: '15px 20px',
-                  textAlign: 'left',
-                  fontWeight: 'bold',
-                  textTransform: 'uppercase',
-                  letterSpacing: '1px',
-                  borderBottom: '2px solid #333'
-                }}>
-                  ARTIKEL ID
-                </th>
-                <th style={{
-                  padding: '15px 20px',
-                  textAlign: 'left',
-                  fontWeight: 'bold',
-                  textTransform: 'uppercase',
-                  letterSpacing: '1px',
-                  borderBottom: '2px solid #333'
-                }}>
-                  TIDPUNKT
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {articles.length === 0 ? (
-                <tr style={{
-                  borderBottom: '1px solid #333'
-                }}>
-                  <td colSpan={2} style={{
-                    textAlign: 'center',
-                    padding: '60px 20px',
-                    color: '#666',
-                    backgroundColor: '#000'
-                  }}>
-                    <div style={{
-                      fontSize: '18px',
-                      textTransform: 'uppercase',
-                      letterSpacing: '2px'
-                    }}>
-                      INGA ARTIKLAR REGISTRERADE
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                articles.map((article, index) => (
-                  <tr
-                    key={`${article.id}-${article.timestamp.getTime()}`}
-                    style={{
-                      borderBottom: '1px solid #333',
-                      backgroundColor: index % 2 === 0 ? '#000' : '#111'
-                    }}
-                  >
-                    <td style={{
-                      padding: '15px 20px',
-                      color: '#faf8f5',
-                      fontWeight: 'bold',
-                      fontSize: '16px'
-                    }}>
-                      {article.id}
-                    </td>
-                    <td style={{
-                      padding: '15px 20px',
-                      color: '#ccc',
-                      fontSize: '14px'
-                    }}>
-                      {formatTimestamp(article.timestamp)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+  {/* Inventory List */}
+  <InventoryTable articles={articles} formatTimestamp={formatTimestamp} />
       </div>
 
       {/* Admin Settings Modal */}
-      {showSettings && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: '#faf8f5',
-            border: '3px solid #000',
-            padding: '30px',
-            maxWidth: '600px',
-            width: '90%',
-            maxHeight: '80vh',
-            overflow: 'auto'
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '20px'
-            }}>
-              <h2 style={{
-                fontSize: '20px',
-                fontWeight: 'bold',
-                textTransform: 'uppercase',
-                letterSpacing: '2px',
-                margin: 0
-              }}>
-                ADMIN SETTINGS
-              </h2>
-              <button
-                onClick={() => {
-                  setShowSettings(false);
-                  setIsAdminUnlocked(false);
-                  setAdminPassword('');
-                }}
-                style={{
-                  padding: '5px 10px',
-                  fontSize: '14px',
-                  fontFamily: '"Courier New", monospace',
-                  border: '2px solid #000',
-                  backgroundColor: '#ef4444',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  fontWeight: 'bold'
-                }}
-              >
-                <X style={{ width: '16px', height: '16px' }} />
-              </button>
-            </div>
-
-            {!isAdminUnlocked ? (
-              <div>
-                <p style={{ marginBottom: '15px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                  Ah ah ah! You didn't say the magic word!
-                </p>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <input
-                    type="password"
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAdminLogin()}
-                    style={{
-                      flex: 1,
-                      padding: '10px',
-                      fontSize: '16px',
-                      fontFamily: '"Courier New", monospace',
-                      border: '2px solid #000',
-                      backgroundColor: '#fff',
-                      outline: 'none'
-                    }}
-                    placeholder="Password..."
-                  />
-                  <button
-                    onClick={handleAdminLogin}
-                    style={{
-                      padding: '10px 20px',
-                      fontSize: '14px',
-                      fontFamily: '"Courier New", monospace',
-                      border: '2px solid #000',
-                      backgroundColor: '#4ade80',
-                      color: '#000',
-                      cursor: 'pointer',
-                      textTransform: 'uppercase',
-                      letterSpacing: '1px',
-                      fontWeight: 'bold'
-                    }}
-                  >
-                    LOGIN
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                {/* Department Mappings */}
-                <div>
-                  <h3 style={{
-                    fontSize: '16px',
-                    fontWeight: 'bold',
-                    textTransform: 'uppercase',
-                    letterSpacing: '1px',
-                    marginBottom: '10px'
-                  }}>
-                    DEPARTMENT MAPPINGS
-                  </h3>
-                  
-                  <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
-                    <input
-                      type="text"
-                      value={newPrefix}
-                      onChange={(e) => setNewPrefix(e.target.value)}
-                      placeholder="PREFIX"
-                      style={{
-                        flex: 1,
-                        padding: '8px',
-                        fontSize: '14px',
-                        fontFamily: '"Courier New", monospace',
-                        border: '2px solid #000',
-                        backgroundColor: '#fff',
-                        outline: 'none',
-                        textTransform: 'uppercase'
-                      }}
-                    />
-                    <input
-                      type="text"
-                      value={newDepartment}
-                      onChange={(e) => setNewDepartment(e.target.value)}
-                      placeholder="DEPARTMENT"
-                      style={{
-                        flex: 2,
-                        padding: '8px',
-                        fontSize: '14px',
-                        fontFamily: '"Courier New", monospace',
-                        border: '2px solid #000',
-                        backgroundColor: '#fff',
-                        outline: 'none'
-                      }}
-                    />
-                    <button
-                      onClick={handleAddDepartmentMapping}
-                      style={{
-                        padding: '8px 15px',
-                        fontSize: '12px',
-                        fontFamily: '"Courier New", monospace',
-                        border: '2px solid #000',
-                        backgroundColor: '#4ade80',
-                        color: '#000',
-                        cursor: 'pointer',
-                        fontWeight: 'bold'
-                      }}
-                    >
-                      <Plus style={{ width: '14px', height: '14px' }} />
-                    </button>
-                  </div>
-
-                  <div style={{ maxHeight: '120px', overflow: 'auto' }}>
-                    {departmentMappings.map((mapping) => (
-                      <div
-                        key={mapping.prefix}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          padding: '8px',
-                          backgroundColor: '#000',
-                          color: '#faf8f5',
-                          marginBottom: '2px',
-                          fontSize: '14px'
-                        }}
-                      >
-                        <span style={{ fontWeight: 'bold' }}>{mapping.prefix}</span>
-                        <span>{mapping.department}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                  <button
-                    onClick={handleExport}
-                    style={{
-                      padding: '10px 15px',
-                      fontSize: '12px',
-                      fontFamily: '"Courier New", monospace',
-                      border: '2px solid #000',
-                      backgroundColor: '#4ade80',
-                      color: '#000',
-                      cursor: 'pointer',
-                      textTransform: 'uppercase',
-                      letterSpacing: '1px',
-                      fontWeight: 'bold'
-                    }}
-                  >
-                    <Download style={{ width: '14px', height: '14px', marginRight: '5px' }} />
-                    EXPORT
-                  </button>
-
-                  <button
-                    onClick={handleClearLogs}
-                    style={{
-                      padding: '10px 15px',
-                      fontSize: '12px',
-                      fontFamily: '"Courier New", monospace',
-                      border: '2px solid #000',
-                      backgroundColor: '#ef4444',
-                      color: '#fff',
-                      cursor: 'pointer',
-                      textTransform: 'uppercase',
-                      letterSpacing: '1px',
-                      fontWeight: 'bold'
-                    }}
-                  >
-                    <Trash2 style={{ width: '14px', height: '14px', marginRight: '5px' }} />
-                    CLEAR LOGS
-                  </button>
-
-                  <button
-                    onClick={() => setShowBarcodeGenerator(true)}
-                    style={{
-                      padding: '10px 15px',
-                      fontSize: '12px',
-                      fontFamily: '"Courier New", monospace',
-                      border: '2px solid #000',
-                      backgroundColor: '#fbbf24',
-                      color: '#000',
-                      cursor: 'pointer',
-                      textTransform: 'uppercase',
-                      letterSpacing: '1px',
-                      fontWeight: 'bold'
-                    }}
-                  >
-                    <QrCode style={{ width: '14px', height: '14px', marginRight: '5px' }} />
-                    GENERATE CODES
-                  </button>
-                </div>
-
-                {/* Items Summary */}
-                <div>
-                  <h3 style={{
-                    fontSize: '16px',
-                    fontWeight: 'bold',
-                    textTransform: 'uppercase',
-                    letterSpacing: '1px',
-                    marginBottom: '10px'
-                  }}>
-                    CURRENT STATUS
-                  </h3>
-                  <div style={{
-                    backgroundColor: '#000',
-                    color: '#faf8f5',
-                    padding: '15px',
-                    fontSize: '14px'
-                  }}>
-                    <div>CHECKED OUT ITEMS: {checkedOutItems.length}</div>
-                    <div>RECENT LOGS: {recentLogs.length}</div>
-                    <div>DEPARTMENT MAPPINGS: {departmentMappings.length}</div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Barcode Generator Modal */}
-      {showBarcodeGenerator && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1001
-        }}>
-          <div style={{
-            backgroundColor: '#faf8f5',
-            border: '3px solid #000',
-            padding: '20px',
-            maxWidth: '500px',
-            width: '90%'
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '15px'
-            }}>
-              <h3 style={{
-                fontSize: '18px',
-                fontWeight: 'bold',
-                textTransform: 'uppercase',
-                letterSpacing: '1px',
-                margin: 0
-              }}>
-                BARCODE GENERATOR
-              </h3>
-              <button
-                onClick={() => setShowBarcodeGenerator(false)}
-                style={{
-                  padding: '5px 10px',
-                  fontSize: '14px',
-                  fontFamily: '"Courier New", monospace',
-                  border: '2px solid #000',
-                  backgroundColor: '#ef4444',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  fontWeight: 'bold'
-                }}
-              >
-                <X style={{ width: '16px', height: '16px' }} />
-              </button>
-            </div>
-            <BarcodeGenerator />
-          </div>
-        </div>
-      )}
+      <AdminSettingsModal
+        show={showSettings}
+        isAdminUnlocked={isAdminUnlocked}
+        adminPassword={adminPassword}
+        setShow={setShowSettings}
+        setIsAdminUnlocked={setIsAdminUnlocked}
+        setAdminPassword={setAdminPassword}
+        handleAdminLogin={handleAdminLogin}
+        departmentMappings={departmentMappings}
+        newPrefix={newPrefix}
+        setNewPrefix={setNewPrefix}
+        newDepartment={newDepartment}
+        setNewDepartment={setNewDepartment}
+        handleAddDepartmentMapping={handleAddDepartmentMapping}
+        handleExport={handleExport}
+        handleClearLogs={handleClearLogs}
+        checkedOutItemsCount={checkedOutItems.length}
+        recentLogsCount={recentLogs.length}
+        departmentMappingsCount={departmentMappings.length}
+      />
 
       {/* Toast notification */}
       <div style={{
