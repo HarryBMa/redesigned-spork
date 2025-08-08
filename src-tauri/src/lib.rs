@@ -5,7 +5,6 @@ mod logger;
 mod export;
 mod alert;
 mod tray;
-mod serial_scanner;
 mod printer;
 
 use database::{Database, ScanLog, DepartmentMapping};
@@ -33,7 +32,6 @@ impl AppState {
     fn new() -> Result<Self, Box<dyn std::error::Error>> {        Ok(AppState {
             logger: Arc::new(Mutex::new(Logger::new()?)),
             scanner: Arc::new(Mutex::new(scanner::Scanner::new())),
-            serial_scanner: Arc::new(Mutex::new(SerialScanner::new())),
         })
     }
 }
@@ -86,75 +84,6 @@ fn get_database_stats() -> Result<Value, String> {
 fn archive_completed_transactions(days_to_keep: i32) -> Result<usize, String> {
     let db = Database::new().map_err(|e| e.to_string())?;
     db.archive_completed_transactions(days_to_keep).map_err(|e| e.to_string())
-}
-
-// Zebra printer commands
-#[tauri::command]
-fn get_printer_settings() -> Result<PrinterSettings, String> {
-    let db = Database::new().map_err(|e| e.to_string())?;
-    
-    // Try to get saved printer settings, otherwise return defaults
-    let settings = PrinterSettings {
-        ip_address: db.get_setting("printer_ip").map_err(|e| e.to_string())?.unwrap_or_else(|| "192.168.1.100".to_string()),
-        port: db.get_setting("printer_port").map_err(|e| e.to_string())?.and_then(|p| p.parse().ok()).unwrap_or(9100),
-        label_width: db.get_setting("label_width").map_err(|e| e.to_string())?.and_then(|w| w.parse().ok()).unwrap_or(203),
-        label_height: db.get_setting("label_height").map_err(|e| e.to_string())?.and_then(|h| h.parse().ok()).unwrap_or(152),
-        print_density: db.get_setting("print_density").map_err(|e| e.to_string())?.and_then(|d| d.parse().ok()).unwrap_or(8),
-        print_speed: db.get_setting("print_speed").map_err(|e| e.to_string())?.and_then(|s| s.parse().ok()).unwrap_or(6),
-    };
-    
-    Ok(settings)
-}
-
-#[tauri::command]
-fn set_printer_settings(settings: PrinterSettings) -> Result<(), String> {
-    let db = Database::new().map_err(|e| e.to_string())?;
-    
-    db.set_setting("printer_ip", &settings.ip_address).map_err(|e| e.to_string())?;
-    db.set_setting("printer_port", &settings.port.to_string()).map_err(|e| e.to_string())?;
-    db.set_setting("label_width", &settings.label_width.to_string()).map_err(|e| e.to_string())?;
-    db.set_setting("label_height", &settings.label_height.to_string()).map_err(|e| e.to_string())?;
-    db.set_setting("print_density", &settings.print_density.to_string()).map_err(|e| e.to_string())?;
-    db.set_setting("print_speed", &settings.print_speed.to_string()).map_err(|e| e.to_string())?;
-    
-    Ok(())
-}
-
-#[tauri::command]
-fn print_barcodes_to_zebra(barcodes: Vec<String>, department: Option<String>) -> Result<(), String> {
-    let settings = get_printer_settings()?;
-    let printer = ZebraPrinter::new(settings);
-    
-    printer.print_barcodes(&barcodes, department.as_deref()).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn test_zebra_printer() -> Result<(), String> {
-    let settings = get_printer_settings()?;
-    let printer = ZebraPrinter::new(settings);
-    
-    printer.test_connection().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn print_test_label() -> Result<(), String> {
-    let settings = get_printer_settings()?;
-    let printer = ZebraPrinter::new(settings);
-    
-    printer.print_test_label().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn get_zebra_printer_status() -> Result<String, String> {
-    let settings = get_printer_settings()?;
-    let printer = ZebraPrinter::new(settings);
-    
-    printer.get_status().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn discover_zebra_printers() -> Result<Vec<String>, String> {
-    Ok(printer::discover_zebra_printers())
 }
 
 #[tauri::command]
@@ -323,26 +252,6 @@ fn show_quick_scan_popup(app: AppHandle) -> Result<(), String> {
     TrayManager::show_quick_scan_popup(&app).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-fn apply_window_effects(app: AppHandle, window_label: String) -> Result<(), String> {
-    if let Some(window) = app.webview_windows().get(&window_label) {
-        #[cfg(target_os = "macos")]
-        {
-            apply_vibrancy(&window, NSVisualEffectMaterial::HudWindow, None, None)
-                .map_err(|e| format!("Failed to apply vibrancy: {}", e))?;
-        }
-        
-        #[cfg(target_os = "windows")]
-        {
-            clear_mica(&window,)
-                .map_err(|e| format!("Failed to apply blur: {}", e))?;
-        }
-        
-        Ok(())
-    } else {
-        Err(format!("Window '{}' not found", window_label))
-    }
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -404,15 +313,7 @@ pub fn run() {
             get_database_stats,
             archive_completed_transactions,
             
-            // Zebra printer commands  
-            get_printer_settings,
-            set_printer_settings,
-            print_barcodes_to_zebra,
-            test_zebra_printer,
-            print_test_label,
-            get_zebra_printer_status,
-            discover_zebra_printers,
-            
+                    
             // Scanner commands
             start_manual_scan_session,
             stop_scan_session,
@@ -439,10 +340,6 @@ pub fn run() {
             set_department_mapping,
             delete_department_mapping,
             
-            // Serial scanner commands
-            open_serial_scanner,
-            close_serial_scanner,
-            show_quick_scan_popup,
             
         ])
         .run(tauri::generate_context!())

@@ -32,7 +32,7 @@ impl TrayManager {
         let _tray = TrayIconBuilder::new()
             .menu(&menu)
             .icon(app.default_window_icon().unwrap().clone())
-            .tooltip("Harry's Lilla Lager - Kirurgisk lagersystem")
+            .tooltip("Harry's Lilla Lager - Kirurgiskt lagersystem")
             .on_menu_event(move |app_handle, event| {
                 match event.id().as_ref() {
                     "show_admin" => {
