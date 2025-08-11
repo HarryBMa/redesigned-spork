@@ -10,7 +10,6 @@ pub struct ScanLog {
     pub barcode: String,
     pub action: String, // "check-in" or "check-out"
     pub department: Option<String>,
-    pub item_name: Option<String>, // Display name for the item
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,9 +25,10 @@ pub struct DepartmentMapping {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Item {
+pub struct InventoryItem {
     pub barcode: String,
-    pub name: String,
+    pub department: Option<String>,
+    pub description: Option<String>,
 }
 
 pub struct Database {
@@ -88,11 +88,12 @@ impl Database {
             [],
         )?;
 
-        // Create items table for item names
+        // Create items table (managed inventory catalogue)
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS items (
                 barcode TEXT PRIMARY KEY,
-                name TEXT NOT NULL
+                department TEXT,
+                description TEXT
             )",
             [],
         )?;
@@ -147,18 +148,14 @@ impl Database {
 
         let mut stmt = self.conn.prepare(&sql)?;
         let logs = stmt.query_map([], |row| {
-            let barcode: String = row.get(2)?;
-            let item_name = self.get_item_name(&barcode).unwrap_or(None);
-            
             Ok(ScanLog {
                 id: Some(row.get(0)?),
                 timestamp: DateTime::parse_from_rfc3339(&row.get::<_, String>(1)?)
                     .unwrap_or_else(|_| Local::now().into())
                     .with_timezone(&Local),
-                barcode,
+                barcode: row.get(2)?,
                 action: row.get(3)?,
                 department: row.get(4)?,
-                item_name,
             })
         })?;
 
@@ -185,18 +182,14 @@ impl Database {
         )?;
 
         let logs = stmt.query_map([], |row| {
-            let barcode: String = row.get(2)?;
-            let item_name = self.get_item_name(&barcode).unwrap_or(None);
-            
             Ok(ScanLog {
                 id: Some(row.get(0)?),
                 timestamp: DateTime::parse_from_rfc3339(&row.get::<_, String>(1)?)
                     .unwrap_or_else(|_| Local::now().into())
                     .with_timezone(&Local),
-                barcode,
+                barcode: row.get(2)?,
                 action: row.get(3)?,
                 department: row.get(4)?,
-                item_name,
             })
         })?;
 
@@ -293,6 +286,49 @@ impl Database {
         Ok(())
     }
 
+    // ------------------ Items CRUD ------------------
+    pub fn get_items(&self, limit: Option<i64>) -> Result<Vec<InventoryItem>> {
+        let sql = match limit {
+            Some(l) => format!("SELECT barcode, department, description FROM items ORDER BY barcode LIMIT {}", l),
+            None => "SELECT barcode, department, description FROM items ORDER BY barcode".to_string(),
+        };
+        let mut stmt = self.conn.prepare(&sql)?;
+        let items_iter = stmt.query_map([], |row| {
+            Ok(InventoryItem {
+                barcode: row.get(0)?,
+                department: row.get(1)?,
+                description: row.get(2)?,
+            })
+        })?;
+        let mut items = Vec::new();
+        for item in items_iter { items.push(item?); }
+        Ok(items)
+    }
+
+    pub fn add_item(&self, barcode: &str, department: Option<&str>, description: Option<&str>) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO items (barcode, department, description) VALUES (?1, ?2, ?3)",
+            params![barcode, department, description],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_item(&self, barcode: &str, department: Option<&str>, description: Option<&str>) -> Result<()> {
+        self.conn.execute(
+            "UPDATE items SET department = ?2, description = ?3 WHERE barcode = ?1",
+            params![barcode, department, description],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_item(&self, barcode: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM items WHERE barcode = ?1",
+            params![barcode],
+        )?;
+        Ok(())
+    }
+
     pub fn get_department_from_barcode(&self, barcode: &str) -> Result<Option<String>> {
         let mut stmt = self.conn.prepare(
             "SELECT department FROM department_mappings WHERE ?1 LIKE prefix || '%' ORDER BY LENGTH(prefix) DESC LIMIT 1"
@@ -307,61 +343,6 @@ impl Database {
         } else {
             Ok(None)
         }
-    }
-
-    // Items management methods
-    pub fn add_item(&self, barcode: &str, name: &str) -> Result<()> {
-        self.conn.execute(
-            "INSERT OR REPLACE INTO items (barcode, name) VALUES (?1, ?2)",
-            params![barcode, name],
-        )?;
-        Ok(())
-    }
-
-    pub fn get_item_name(&self, barcode: &str) -> Result<Option<String>> {
-        let mut stmt = self.conn.prepare("SELECT name FROM items WHERE barcode = ?1")?;
-        let mut rows = stmt.query_map(params![barcode], |row| {
-            Ok(row.get::<_, String>(0)?)
-        })?;
-
-        if let Some(row) = rows.next() {
-            Ok(Some(row?))
-        } else {
-            Ok(None)
-        }
-    }
-
-    pub fn get_all_items(&self) -> Result<Vec<Item>> {
-        let mut stmt = self.conn.prepare("SELECT barcode, name FROM items ORDER BY name")?;
-        let items = stmt.query_map([], |row| {
-            Ok(Item {
-                barcode: row.get(0)?,
-                name: row.get(1)?,
-            })
-        })?;
-
-        let mut result = Vec::new();
-        for item in items {
-            result.push(item?);
-        }
-        Ok(result)
-    }
-
-    pub fn delete_item(&self, barcode: &str) -> Result<()> {
-        self.conn.execute(
-            "DELETE FROM items WHERE barcode = ?1",
-            params![barcode],
-        )?;
-        Ok(())
-    }
-
-    pub fn import_items_from_list(&self, items: &[(String, String)]) -> Result<usize> {
-        let mut imported_count = 0;
-        for (barcode, name) in items {
-            self.add_item(barcode, name)?;
-            imported_count += 1;
-        }
-        Ok(imported_count)
     }
 
     /// Clean up old logs to prevent infinite database growth
@@ -412,6 +393,52 @@ impl Database {
         };
         
         Ok((total_logs, size_str))
+    }
+
+    /// Get item name by barcode
+    pub fn get_item_name(&self, barcode: &str) -> Result<Option<String>> {
+        let mut stmt = self.conn.prepare("SELECT name FROM item_names WHERE barcode = ?1")?;
+        match stmt.query_row(params![barcode.to_uppercase()], |row| {
+            Ok(row.get::<_, String>(0)?)
+        }) {
+            Ok(name) => Ok(Some(name)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Set item name for barcode
+    pub fn set_item_name(&self, barcode: &str, name: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO item_names (barcode, name) VALUES (?1, ?2)",
+            params![barcode.to_uppercase(), name],
+        )?;
+        Ok(())
+    }
+
+    /// Import multiple item names from a list
+    pub fn import_item_names(&self, items: &[(String, String)]) -> Result<usize> {
+        let tx = self.conn.unchecked_transaction()?;
+        let mut count = 0;
+        
+        for (barcode, name) in items {
+            tx.execute(
+                "INSERT OR REPLACE INTO item_names (barcode, name) VALUES (?1, ?2)",
+                params![barcode.to_uppercase(), name],
+            )?;
+            count += 1;
+        }
+        
+        tx.commit()?;
+        Ok(count)
+    }
+
+    /// Get formatted display name for barcode (name + barcode or just barcode)
+    pub fn get_display_name(&self, barcode: &str) -> Result<String> {
+        match self.get_item_name(barcode)? {
+            Some(name) => Ok(format!("{} ({})", name.to_uppercase(), barcode.to_uppercase())),
+            None => Ok(barcode.to_uppercase()),
+        }
     }
 
     /// Archive old completed transactions (check-out followed by check-in pairs)

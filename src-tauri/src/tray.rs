@@ -3,6 +3,8 @@ use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
     AppHandle, Manager, WebviewWindowBuilder, Emitter,
 };
+// We'll construct a custom single-color tray icon (only for the tray) in the requested color #f88379.
+use tauri::image::Image; // provides Image::from_rgba for custom icon creation
 
 pub struct TrayManager;
 
@@ -71,48 +73,14 @@ impl TrayManager {
             .item(&quit)
             .build()?;
 
-        // Get the appropriate icon based on system theme
-        let icon_path = match Self::get_tray_icon_path(app) {
-            Ok(path) => {
-                println!("Successfully found tray icon: {:?}", path);
-                path
-            },
-            Err(e) => {
-                eprintln!("Warning: Could not load tray icon: {}", e);
-                println!("System tray will be disabled");
-                return Err(e);
-            }
-        };
-        
-        // Read the icon file as bytes
-        let icon_bytes = match std::fs::read(&icon_path) {
-            Ok(bytes) => {
-                println!("Successfully read icon file, {} bytes", bytes.len());
-                bytes
-            },
-            Err(e) => {
-                eprintln!("Warning: Failed to read tray icon file {:?}: {}", icon_path, e);
-                println!("System tray will be disabled");
-                return Err(Box::new(e));
-            }
-        };
-        
-        // Try to determine image dimensions from the file
-        let icon = if let Ok(img) = image::open(&icon_path) {
-            let width = img.width();
-            let height = img.height();
-            let rgba = img.to_rgba8().into_raw();
-            println!("Creating tray icon with image size: {}x{}", width, height);
-            tauri::image::Image::new_owned(rgba, width, height)
-        } else {
-            // Fallback: assume it's a 32x32 icon
-            println!("Creating tray icon with assumed size: 32x32");
-            tauri::image::Image::new_owned(icon_bytes, 32, 32)
-        };
+        // Use a generated 32x32 PNG (derived from icon.svg with color #f88379) for tray icon.
+        // Falls back to default window icon if parsing fails.
+        let tray_icon_image = Image::from_bytes(include_bytes!("../icons/tray-icon-32.png"))
+            .unwrap_or_else(|_| app.default_window_icon().unwrap().clone());
 
         let _tray = TrayIconBuilder::new()
             .menu(&menu)
-            .icon(icon)
+            .icon(tray_icon_image)
             .tooltip("Harry's Lilla Lager - Kirurgiskt lagersystem")
             .on_menu_event(move |app_handle, event| {
                 match event.id().as_ref() {

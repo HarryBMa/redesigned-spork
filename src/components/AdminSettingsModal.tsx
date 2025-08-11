@@ -1,38 +1,58 @@
-import React, { useRef } from 'react';
-import { X, Download, Trash2, QrCode, Plus, Upload } from 'lucide-react';
-import { DepartmentMapping, ScanLog } from '../types';
+import React from 'react';
+import { X, Plus, Download, Trash2, Edit2, Save, XCircle } from 'lucide-react';
+
+interface DepartmentMapping {
+  prefix: string;
+  department: string;
+}
+
+interface InventoryItem {
+  barcode: string;
+  department?: string;
+  description?: string;
+}
 
 interface AdminSettingsModalProps {
-  showSettings: boolean;
+  show: boolean;
   isAdminUnlocked: boolean;
   adminPassword: string;
-  setAdminPassword: (password: string) => void;
-  setShowSettings: (show: boolean) => void;
+  setShow: (show: boolean) => void;
   setIsAdminUnlocked: (unlocked: boolean) => void;
+  setAdminPassword: (pw: string) => void;
   handleAdminLogin: () => void;
   departmentMappings: DepartmentMapping[];
   newPrefix: string;
   setNewPrefix: (prefix: string) => void;
   newDepartment: string;
-  setNewDepartment: (department: string) => void;
+  setNewDepartment: (dep: string) => void;
   handleAddDepartmentMapping: () => void;
+  handleUpdateDepartmentMapping: (oldPrefix: string, newPrefix: string, newDepartment: string) => void;
+  handleDeleteDepartmentMapping: (prefix: string) => void;
+  items: InventoryItem[];
+  newItemBarcode: string;
+  setNewItemBarcode: (v: string) => void;
+  newItemDepartment: string;
+  setNewItemDepartment: (v: string) => void;
+  newItemDescription: string;
+  setNewItemDescription: (v: string) => void;
+  handleAddItem: () => void;
+  handleUpdateItem: (barcode: string, department: string | undefined, description: string | undefined) => void;
+  handleDeleteItem: (barcode: string) => void;
   handleExport: () => void;
   handleClearLogs: () => void;
-  handleCsvImport: (file: File) => void;
-  setShowBarcodeGenerator: (show: boolean) => void;
-  setShowItemManagement: (show: boolean) => void;
-  checkedOutItems: ScanLog[];
-  recentLogs: ScanLog[];
-  allItems: any[];
+  handleImportItemNames: (items: Array<[string, string]>) => void;
+  checkedOutItemsCount: number;
+  recentLogsCount: number;
+  departmentMappingsCount: number;
 }
 
 const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
-  showSettings,
+  show,
   isAdminUnlocked,
   adminPassword,
-  setAdminPassword,
-  setShowSettings,
+  setShow,
   setIsAdminUnlocked,
+  setAdminPassword,
   handleAdminLogin,
   departmentMappings,
   newPrefix,
@@ -40,32 +60,57 @@ const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
   newDepartment,
   setNewDepartment,
   handleAddDepartmentMapping,
+  handleUpdateDepartmentMapping,
+  handleDeleteDepartmentMapping,
+  items,
+  newItemBarcode,
+  setNewItemBarcode,
+  newItemDepartment,
+  setNewItemDepartment,
+  newItemDescription,
+  setNewItemDescription,
+  handleAddItem,
+  handleUpdateItem,
+  handleDeleteItem,
   handleExport,
   handleClearLogs,
-  handleCsvImport,
-  setShowBarcodeGenerator,
-  setShowItemManagement,
-  checkedOutItems,
-  recentLogs,
-  allItems
+  handleImportItemNames,
+  checkedOutItemsCount,
+  recentLogsCount,
+  departmentMappingsCount
 }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file && file.type === 'text/csv') {
-      handleCsvImport(file);
-    } else if (file) {
-      alert('Please select a CSV file');
-    }
-    // Reset the input so the same file can be selected again
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+  if (!show) return null;
+  const [editingDept, setEditingDept] = React.useState<string | null>(null);
+  const [editPrefix, setEditPrefix] = React.useState("");
+  const [editDepartment, setEditDepartment] = React.useState("");
+  const startEditDept = (m: DepartmentMapping) => {
+    setEditingDept(m.prefix);
+    setEditPrefix(m.prefix);
+    setEditDepartment(m.department);
+  };
+  const saveEditDept = () => {
+    if (editingDept) {
+      handleUpdateDepartmentMapping(editingDept, editPrefix, editDepartment);
+      setEditingDept(null);
     }
   };
+  const cancelEditDept = () => { setEditingDept(null); };
 
-  if (!showSettings) return null;
-
+  const [editingItem, setEditingItem] = React.useState<string | null>(null);
+  const [editItemDepartment, setEditItemDepartment] = React.useState("");
+  const [editItemDescription, setEditItemDescription] = React.useState("");
+  const startEditItem = (it: InventoryItem) => {
+    setEditingItem(it.barcode);
+    setEditItemDepartment(it.department || "");
+    setEditItemDescription(it.description || "");
+  };
+  const saveEditItem = () => {
+    if (editingItem) {
+      handleUpdateItem(editingItem, editItemDepartment || undefined, editItemDescription || undefined);
+      setEditingItem(null);
+    }
+  };
+  const cancelEditItem = () => setEditingItem(null);
   return (
     <div style={{
       position: 'fixed',
@@ -105,7 +150,7 @@ const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
           </h2>
           <button
             onClick={() => {
-              setShowSettings(false);
+              setShow(false);
               setIsAdminUnlocked(false);
               setAdminPassword('');
             }}
@@ -123,7 +168,6 @@ const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
             <X style={{ width: '16px', height: '16px' }} />
           </button>
         </div>
-
         {!isAdminUnlocked ? (
           <div>
             <p style={{ marginBottom: '15px', textTransform: 'uppercase', letterSpacing: '1px' }}>
@@ -178,7 +222,6 @@ const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
               }}>
                 DEPARTMENT MAPPINGS
               </h3>
-              
               <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
                 <input
                   type="text"
@@ -227,29 +270,66 @@ const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
                   <Plus style={{ width: '14px', height: '14px' }} />
                 </button>
               </div>
-
-              <div style={{ maxHeight: '120px', overflow: 'auto' }}>
-                {departmentMappings.map((mapping) => (
-                  <div
-                    key={mapping.prefix}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '8px',
-                      backgroundColor: '#000',
-                      color: '#faf8f5',
-                      marginBottom: '2px',
-                      fontSize: '14px'
-                    }}
-                  >
-                    <span style={{ fontWeight: 'bold' }}>{mapping.prefix}</span>
-                    <span>{mapping.department}</span>
-                  </div>
-                ))}
+              <div style={{ maxHeight: '160px', overflow: 'auto' }}>
+                {departmentMappings.map((mapping) => {
+                  const isEditing = editingDept === mapping.prefix;
+                  return (
+                    <div key={mapping.prefix} style={{ display:'flex', alignItems:'center', gap:'6px', padding:'6px', backgroundColor:'#000', color:'#faf8f5', marginBottom:'2px', fontSize:'12px' }}>
+                      {isEditing ? (
+                        <>
+                          <input value={editPrefix} onChange={e=>setEditPrefix(e.target.value.toUpperCase())} style={{ width:'70px', fontSize:'12px'}} />
+                          <input value={editDepartment} onChange={e=>setEditDepartment(e.target.value)} style={{ flex:1, fontSize:'12px'}} />
+                          <button onClick={saveEditDept} style={{ background:'#4ade80', border:'1px solid #fff', cursor:'pointer' }}><Save style={{ width:14}} /></button>
+                          <button onClick={cancelEditDept} style={{ background:'#ef4444', border:'1px solid #fff', cursor:'pointer' }}><XCircle style={{ width:14}} /></button>
+                        </>
+                      ) : (
+                        <>
+                          <span style={{ fontWeight:'bold', width:'70px'}}>{mapping.prefix}</span>
+                          <span style={{ flex:1 }}>{mapping.department}</span>
+                          <button onClick={()=>startEditDept(mapping)} style={{ background:'#4ade80', border:'1px solid #fff', cursor:'pointer' }}><Edit2 style={{ width:14}} /></button>
+                          <button onClick={()=>handleDeleteDepartmentMapping(mapping.prefix)} style={{ background:'#ef4444', border:'1px solid #fff', cursor:'pointer' }}><Trash2 style={{ width:14}} /></button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
-
+            {/* Items Catalogue */}
+            <div>
+              <h3 style={{ fontSize:'16px', fontWeight:'bold', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'10px' }}>ITEMS</h3>
+              <div style={{ display:'flex', gap:'10px', marginBottom:'10px' }}>
+                <input value={newItemBarcode} onChange={e=>setNewItemBarcode(e.target.value.toUpperCase())} placeholder="BARCODE" style={{ flex:1, padding:'6px', border:'2px solid #000', fontSize:'12px'}} />
+                <input value={newItemDepartment} onChange={e=>setNewItemDepartment(e.target.value)} placeholder="DEPARTMENT" style={{ flex:1, padding:'6px', border:'2px solid #000', fontSize:'12px'}} />
+                <input value={newItemDescription} onChange={e=>setNewItemDescription(e.target.value)} placeholder="DESCRIPTION" style={{ flex:2, padding:'6px', border:'2px solid #000', fontSize:'12px'}} />
+                <button onClick={handleAddItem} style={{ padding:'6px 10px', border:'2px solid #000', background:'#4ade80', cursor:'pointer' }}><Plus style={{ width:14}} /></button>
+              </div>
+              <div style={{ maxHeight:'160px', overflow:'auto', border:'1px solid #000' }}>
+                {items.map(it => {
+                  const isEditing = editingItem === it.barcode;
+                  return (
+                    <div key={it.barcode} style={{ display:'flex', gap:'6px', alignItems:'center', padding:'4px 6px', background:'#000', color:'#faf8f5', fontSize:'12px', marginBottom:'2px' }}>
+                      <span style={{ fontWeight:'bold', width:'90px' }}>{it.barcode}</span>
+                      {isEditing ? (
+                        <>
+                          <input value={editItemDepartment} onChange={e=>setEditItemDepartment(e.target.value)} style={{ width:'120px', fontSize:'12px'}} />
+                          <input value={editItemDescription} onChange={e=>setEditItemDescription(e.target.value)} style={{ flex:1, fontSize:'12px'}} />
+                          <button onClick={saveEditItem} style={{ background:'#4ade80', border:'1px solid #fff', cursor:'pointer' }}><Save style={{ width:14}} /></button>
+                          <button onClick={cancelEditItem} style={{ background:'#ef4444', border:'1px solid #fff', cursor:'pointer' }}><XCircle style={{ width:14}} /></button>
+                        </>
+                      ) : (
+                        <>
+                          <span style={{ width:'120px' }}>{it.department || '-'}</span>
+                          <span style={{ flex:1 }}>{it.description || ''}</span>
+                          <button onClick={()=>startEditItem(it)} style={{ background:'#4ade80', border:'1px solid #fff', cursor:'pointer' }}><Edit2 style={{ width:14}} /></button>
+                          <button onClick={()=>handleDeleteItem(it.barcode)} style={{ background:'#ef4444', border:'1px solid #fff', cursor:'pointer' }}><Trash2 style={{ width:14}} /></button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
             {/* Action Buttons */}
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <button
@@ -270,7 +350,6 @@ const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
                 <Download style={{ width: '14px', height: '14px', marginRight: '5px' }} />
                 EXPORT
               </button>
-
               <button
                 onClick={handleClearLogs}
                 style={{
@@ -289,94 +368,107 @@ const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
                 <Trash2 style={{ width: '14px', height: '14px', marginRight: '5px' }} />
                 CLEAR LOGS
               </button>
-
-              <button
-                onClick={() => setShowBarcodeGenerator(true)}
-                style={{
-                  padding: '10px 15px',
-                  fontSize: '12px',
-                  fontFamily: '"Courier New", monospace',
-                  border: '2px solid #000',
-                  backgroundColor: '#fbbf24',
-                  color: '#000',
-                  cursor: 'pointer',
-                  textTransform: 'uppercase',
-                  letterSpacing: '1px',
-                  fontWeight: 'bold'
-                }}
-              >
-                <QrCode style={{ width: '14px', height: '14px', marginRight: '5px' }} />
-                GENERATE CODES
-              </button>
-
-              <button
-                onClick={() => setShowItemManagement(true)}
-                style={{
-                  padding: '10px 15px',
-                  fontSize: '12px',
-                  fontFamily: '"Courier New", monospace',
-                  border: '2px solid #000',
-                  backgroundColor: '#8b5cf6',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  textTransform: 'uppercase',
-                  letterSpacing: '1px',
-                  fontWeight: 'bold'
-                }}
-              >
-                <Plus style={{ width: '14px', height: '14px', marginRight: '5px' }} />
-                MANAGE ITEMS
-              </button>
-
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                style={{
-                  padding: '10px 15px',
-                  fontSize: '12px',
-                  fontFamily: '"Courier New", monospace',
-                  border: '2px solid #000',
-                  backgroundColor: '#06b6d4',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  textTransform: 'uppercase',
-                  letterSpacing: '1px',
-                  fontWeight: 'bold'
-                }}
-              >
-                <Upload style={{ width: '14px', height: '14px', marginRight: '5px' }} />
-                IMPORT CSV
-              </button>
               
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv"
-                onChange={handleFileSelect}
-                style={{ display: 'none' }}
-              />
-            </div>
-
-            {/* Items Summary */}
-            <div>
-              <h3 style={{
-                fontSize: '16px',
-                fontWeight: 'bold',
-                textTransform: 'uppercase',
-                letterSpacing: '1px',
-                marginBottom: '10px'
-              }}>
-                CURRENT STATUS
-              </h3>
-              <div style={{
-                backgroundColor: '#000',
-                color: '#faf8f5',
-                padding: '15px',
-                fontSize: '14px'
-              }}>
-                <div>CHECKED OUT ITEMS: {checkedOutItems.length}</div>
-                <div>RECENT LOGS: {recentLogs.length}</div>
-                <div>DEPARTMENT MAPPINGS: {departmentMappings.length}</div>
-                <div>TOTAL ITEMS: {allItems.length}</div>
+              {/* Import Item Names Section */}
+              <div>
+                <h3 style={{
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  textTransform: 'uppercase',
+                  letterSpacing: '1px',
+                  marginBottom: '10px'
+                }}>
+                  IMPORT ITEM NAMES
+                </h3>
+                <div style={{
+                  backgroundColor: '#f0f0f0',
+                  padding: '15px',
+                  border: '2px solid #000',
+                  marginBottom: '15px'
+                }}>
+                  <p style={{ 
+                    fontSize: '12px', 
+                    marginBottom: '10px',
+                    lineHeight: '1.4'
+                  }}>
+                    Format: One line per item with "BARCODE,NAME"<br/>
+                    Example: KÄKX001,KÄKLED
+                  </p>
+                  <textarea
+                    placeholder="KÄKX001,KÄKLED&#10;KÄKX002,KÄKSPATEL&#10;ORTX001,ORTHOSKRUV"
+                    style={{
+                      width: '100%',
+                      height: '80px',
+                      padding: '10px',
+                      fontSize: '12px',
+                      fontFamily: '"Courier New", monospace',
+                      border: '2px solid #000',
+                      backgroundColor: '#fff',
+                      outline: 'none',
+                      resize: 'vertical'
+                    }}
+                    id="importTextarea"
+                  />
+                  <button
+                    onClick={() => {
+                      const textarea = document.getElementById('importTextarea') as HTMLTextAreaElement;
+                      if (textarea?.value.trim()) {
+                        const lines = textarea.value.trim().split('\n');
+                        const items: Array<[string, string]> = [];
+                        
+                        for (const line of lines) {
+                          const [barcode, name] = line.split(',').map(s => s.trim());
+                          if (barcode && name) {
+                            items.push([barcode, name]);
+                          }
+                        }
+                        
+                        if (items.length > 0) {
+                          handleImportItemNames(items);
+                          textarea.value = '';
+                        }
+                      }
+                    }}
+                    style={{
+                      padding: '10px 15px',
+                      fontSize: '12px',
+                      fontFamily: '"Courier New", monospace',
+                      border: '2px solid #000',
+                      backgroundColor: '#4ade80',
+                      color: '#000',
+                      cursor: 'pointer',
+                      textTransform: 'uppercase',
+                      letterSpacing: '1px',
+                      fontWeight: 'bold',
+                      marginTop: '10px'
+                    }}
+                  >
+                    IMPORT NAMES
+                  </button>
+                </div>
+              </div>
+              
+              {/* Items Summary */}
+              <div>
+                <h3 style={{
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  textTransform: 'uppercase',
+                  letterSpacing: '1px',
+                  marginBottom: '10px'
+                }}>
+                  CURRENT STATUS
+                </h3>
+                <div style={{
+                  backgroundColor: '#000',
+                  color: '#faf8f5',
+                  padding: '15px',
+                  fontSize: '14px'
+                }}>
+                  <div>CHECKED OUT ITEMS: {checkedOutItemsCount}</div>
+                  <div>RECENT LOGS: {recentLogsCount}</div>
+                  <div>DEPARTMENT MAPPINGS: {departmentMappingsCount}</div>
+                </div>
               </div>
             </div>
           </div>

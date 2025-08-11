@@ -1,21 +1,17 @@
 // Surgical Inventory Tracker - Tauri Backend
-pub mod database;
+mod database;
 mod scanner;
 mod logger;
 mod export;
 mod alert;
 mod tray;
-mod serial_scanner;
-mod printer;
 
-use database::{Database, ScanLog, DepartmentMapping, Item};
+use database::{Database, ScanLog, DepartmentMapping, InventoryItem};
 use logger::Logger;
 use scanner::Scanner;
 use export::Exporter;
 use alert::{AlertManager, OverdueItem, DepartmentAlert};
 use tray::TrayManager;
-use serial_scanner::{SerialScanner, start_serial_scanner_thread};
-use printer::{ZebraPrinter, PrinterSettings};
 
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, State, Emitter, Manager};
@@ -26,15 +22,12 @@ use serde_json::Value;
 struct AppState {
     logger: Arc<Mutex<Logger>>,
     scanner: Arc<Mutex<Scanner>>,
-    serial_scanner: Arc<Mutex<SerialScanner>>,
 }
 
 impl AppState {
-    fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        Ok(AppState {
+    fn new() -> Result<Self, Box<dyn std::error::Error>> {        Ok(AppState {
             logger: Arc::new(Mutex::new(Logger::new()?)),
             scanner: Arc::new(Mutex::new(scanner::Scanner::new())),
-            serial_scanner: Arc::new(Mutex::new(SerialScanner::new())),
         })
     }
 }
@@ -89,83 +82,13 @@ fn archive_completed_transactions(days_to_keep: i32) -> Result<usize, String> {
     db.archive_completed_transactions(days_to_keep).map_err(|e| e.to_string())
 }
 
-// Zebra printer commands
-#[tauri::command]
-fn get_printer_settings() -> Result<PrinterSettings, String> {
-    let db = Database::new().map_err(|e| e.to_string())?;
-    
-    // Try to get saved printer settings, otherwise return defaults
-    let settings = PrinterSettings {
-        ip_address: db.get_setting("printer_ip").map_err(|e| e.to_string())?.unwrap_or_else(|| "192.168.1.100".to_string()),
-        port: db.get_setting("printer_port").map_err(|e| e.to_string())?.and_then(|p| p.parse().ok()).unwrap_or(9100),
-        label_width: db.get_setting("label_width").map_err(|e| e.to_string())?.and_then(|w| w.parse().ok()).unwrap_or(203),
-        label_height: db.get_setting("label_height").map_err(|e| e.to_string())?.and_then(|h| h.parse().ok()).unwrap_or(152),
-        print_density: db.get_setting("print_density").map_err(|e| e.to_string())?.and_then(|d| d.parse().ok()).unwrap_or(8),
-        print_speed: db.get_setting("print_speed").map_err(|e| e.to_string())?.and_then(|s| s.parse().ok()).unwrap_or(6),
-    };
-    
-    Ok(settings)
-}
-
-#[tauri::command]
-fn set_printer_settings(settings: PrinterSettings) -> Result<(), String> {
-    let db = Database::new().map_err(|e| e.to_string())?;
-    
-    db.set_setting("printer_ip", &settings.ip_address).map_err(|e| e.to_string())?;
-    db.set_setting("printer_port", &settings.port.to_string()).map_err(|e| e.to_string())?;
-    db.set_setting("label_width", &settings.label_width.to_string()).map_err(|e| e.to_string())?;
-    db.set_setting("label_height", &settings.label_height.to_string()).map_err(|e| e.to_string())?;
-    db.set_setting("print_density", &settings.print_density.to_string()).map_err(|e| e.to_string())?;
-    db.set_setting("print_speed", &settings.print_speed.to_string()).map_err(|e| e.to_string())?;
-    
-    Ok(())
-}
-
-#[tauri::command]
-fn print_barcodes_to_zebra(barcodes: Vec<String>, department: Option<String>) -> Result<(), String> {
-    let settings = get_printer_settings()?;
-    let printer = ZebraPrinter::new(settings);
-    
-    printer.print_barcodes(&barcodes, department.as_deref()).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn test_zebra_printer() -> Result<(), String> {
-    let settings = get_printer_settings()?;
-    let printer = ZebraPrinter::new(settings);
-    
-    printer.test_connection().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn print_test_label() -> Result<(), String> {
-    let settings = get_printer_settings()?;
-    let printer = ZebraPrinter::new(settings);
-    
-    printer.print_test_label().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn get_zebra_printer_status() -> Result<String, String> {
-    let settings = get_printer_settings()?;
-    let printer = ZebraPrinter::new(settings);
-    
-    printer.get_status().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn discover_zebra_printers() -> Result<Vec<String>, String> {
-    Ok(printer::discover_zebra_printers())
-}
-
 #[tauri::command]
 fn manual_scan_barcode(app: AppHandle, state: State<AppState>, barcode: String) -> Result<Value, String> {
     let mut logger = state.logger.lock().map_err(|e| e.to_string())?;
-    let normalized_barcode = barcode.to_uppercase();
-    let action = logger.process_barcode_scan(&normalized_barcode).map_err(|e| e.to_string())?;
+    let action = logger.process_barcode_scan(&barcode).map_err(|e| e.to_string())?;
     
     let result = serde_json::json!({
-        "barcode": normalized_barcode,
+        "barcode": barcode,
         "action": action.action,
         "department": action.department
     });
@@ -179,11 +102,10 @@ fn manual_scan_barcode(app: AppHandle, state: State<AppState>, barcode: String) 
 #[tauri::command]
 fn force_check_in(state: State<AppState>, barcode: String) -> Result<Value, String> {
     let mut logger = state.logger.lock().map_err(|e| e.to_string())?;
-    let normalized_barcode = barcode.to_uppercase();
-    let action = logger.force_check_in(&normalized_barcode).map_err(|e| e.to_string())?;
+    let action = logger.force_check_in(&barcode).map_err(|e| e.to_string())?;
     
     Ok(serde_json::json!({
-        "barcode": normalized_barcode,
+        "barcode": barcode,
         "action": action.action,
         "department": action.department
     }))
@@ -192,144 +114,13 @@ fn force_check_in(state: State<AppState>, barcode: String) -> Result<Value, Stri
 #[tauri::command]
 fn force_check_out(state: State<AppState>, barcode: String) -> Result<Value, String> {
     let mut logger = state.logger.lock().map_err(|e| e.to_string())?;
-    let normalized_barcode = barcode.to_uppercase();
-    let action = logger.force_check_out(&normalized_barcode).map_err(|e| e.to_string())?;
+    let action = logger.force_check_out(&barcode).map_err(|e| e.to_string())?;
     
     Ok(serde_json::json!({
-        "barcode": normalized_barcode,
+        "barcode": barcode,
         "action": action.action,
         "department": action.department
     }))
-}
-
-// Item management commands
-#[tauri::command]
-fn add_item(_state: State<AppState>, barcode: String, name: String) -> Result<(), String> {
-    let db = Database::new().map_err(|e| e.to_string())?;
-    db.add_item(&barcode, &name).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn get_all_items(_state: State<AppState>) -> Result<Vec<Item>, String> {
-    let db = Database::new().map_err(|e| e.to_string())?;
-    db.get_all_items().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn get_item_name(_state: State<AppState>, barcode: String) -> Result<Option<String>, String> {
-    let db = Database::new().map_err(|e| e.to_string())?;
-    db.get_item_name(&barcode).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn delete_item(_state: State<AppState>, barcode: String) -> Result<(), String> {
-    let db = Database::new().map_err(|e| e.to_string())?;
-    db.delete_item(&barcode).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn import_items_from_list(_state: State<AppState>, items: Vec<(String, String)>) -> Result<usize, String> {
-    let db = Database::new().map_err(|e| e.to_string())?;
-    db.import_items_from_list(&items).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn import_items_from_text(_state: State<AppState>, text_data: String) -> Result<usize, String> {
-    let db = Database::new().map_err(|e| e.to_string())?;
-    let mut items = Vec::new();
-    
-    for line in text_data.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        
-        // Split by comma, tab, or multiple spaces
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 2 {
-            let mut barcode = parts[0].to_string();
-            let mut name = parts[1..].join(" ");
-            
-            // Fix missing X in prefix - check if barcode starts with ÖNH and doesn't have X
-            if barcode.starts_with("ÖNH") && !barcode.starts_with("ÖNHX") {
-                barcode = barcode.replace("ÖNH", "ÖNHX");
-            }
-            
-            // Remove "galler" from name if present
-            name = name.replace("galler", "").trim().to_string();
-            
-            // Skip if name is empty after cleaning
-            if !name.is_empty() {
-                items.push((barcode, name));
-            }
-        }
-    }
-    
-    db.import_items_from_list(&items).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn import_items_from_csv_file(_state: State<AppState>, file_path: String) -> Result<usize, String> {
-    let db = Database::new().map_err(|e| e.to_string())?;
-    let mut items = Vec::new();
-    
-    // Read CSV file
-    let mut rdr = csv::Reader::from_path(&file_path).map_err(|e| format!("Failed to read CSV file: {}", e))?;
-    
-    for result in rdr.records() {
-        let record = result.map_err(|e| format!("Failed to parse CSV record: {}", e))?;
-        
-        if record.len() >= 2 {
-            let barcode = record[0].trim().to_string();
-            let name = record[1].trim().to_string();
-            
-            if !barcode.is_empty() && !name.is_empty() {
-                items.push((barcode, name));
-            }
-        }
-    }
-    
-    if items.is_empty() {
-        return Err("No valid items found in CSV file".to_string());
-    }
-    
-    db.import_items_from_list(&items).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn import_items_from_default_file(_state: State<AppState>) -> Result<usize, String> {
-    let db = Database::new().map_err(|e| e.to_string())?;
-    let mut items = Vec::new();
-    
-    // Try to read items_import.txt from the executable directory first
-    if let Ok(exe_dir) = std::env::current_exe().map(|p| p.parent().unwrap_or(std::path::Path::new(".")).to_path_buf()) {
-        let import_file = exe_dir.join("items_import.txt");
-        if import_file.exists() {
-            if let Ok(content) = std::fs::read_to_string(&import_file) {
-                for line in content.lines() {
-                    let line = line.trim();
-                    if line.is_empty() {
-                        continue;
-                    }
-                    
-                    // Split by space (first word is barcode, rest is name)
-                    let parts: Vec<&str> = line.splitn(2, ' ').collect();
-                    if parts.len() == 2 {
-                        let barcode = parts[0].to_string();
-                        let name = parts[1].to_string();
-                        items.push((barcode, name));
-                    }
-                }
-            }
-        }
-    }
-    
-    if items.is_empty() {
-        return Err("No items_import.txt file found or no valid items in file".to_string());
-    }
-    
-    let imported_count = db.import_items_from_list(&items).map_err(|e| e.to_string())?;
-    Ok(imported_count)
 }
 
 #[tauri::command]
@@ -418,6 +209,51 @@ fn delete_department_mapping(prefix: String) -> Result<(), String> {
     db.delete_department_mapping(&prefix).map_err(|e| e.to_string())
 }
 
+// Items (inventory catalogue) commands
+#[tauri::command]
+fn get_items(limit: Option<i64>) -> Result<Vec<InventoryItem>, String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    db.get_items(limit).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn add_item(barcode: String, department: Option<String>, description: Option<String>) -> Result<(), String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    db.add_item(&barcode, department.as_deref(), description.as_deref()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_item(barcode: String, department: Option<String>, description: Option<String>) -> Result<(), String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    db.update_item(&barcode, department.as_deref(), description.as_deref()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_item(barcode: String) -> Result<(), String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    db.delete_item(&barcode).map_err(|e| e.to_string())
+}
+
+// Legacy item name functions (for backward compatibility)
+#[tauri::command]
+fn import_item_names(items: Vec<(String, String)>) -> Result<usize, String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    db.import_item_names(&items).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_item_display_name(barcode: String) -> Result<String, String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    db.get_display_name(&barcode).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_item_name(barcode: String, name: String) -> Result<(), String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    db.set_item_name(&barcode, &name).map_err(|e| e.to_string())
+}
+}
+
 // Window Management Commands
 #[tauri::command]
 fn close_window(app: AppHandle, label: String) -> Result<(), String> {
@@ -435,28 +271,6 @@ fn hide_window(app: AppHandle, label: String) -> Result<(), String> {
     Ok(())
 }
 
-// Serial Scanner Commands
-#[tauri::command]
-fn open_serial_scanner(app: tauri::AppHandle, state: State<AppState>, port: String, baud: u32) -> Result<(), String> {
-    let mut scanner = state.serial_scanner.lock().map_err(|e| e.to_string())?;
-    scanner.close();
-    scanner.open(&port, baud)?;
-    let scanner_clone = state.serial_scanner.clone();
-    start_serial_scanner_thread(scanner_clone, app);
-    Ok(())
-}
-
-#[tauri::command]
-fn close_serial_scanner(state: State<AppState>) {
-    let mut scanner = state.serial_scanner.lock().unwrap();
-    scanner.close();
-}
-
-#[tauri::command]
-fn show_quick_scan_popup(app: AppHandle) -> Result<(), String> {
-    TrayManager::show_quick_scan_popup(&app).map_err(|e| e.to_string())
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -468,11 +282,9 @@ pub fn run() {
                     std::process::exit(1);
                 }
             }
-        })
-        .plugin(tauri_plugin_opener::init())
+        })        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-     
-            // Setup system tray
+                       // Setup system tray
             if let Err(e) = TrayManager::setup_system_tray(app.handle()) {
                 eprintln!("Failed to setup system tray: {}", e);
             }
@@ -516,15 +328,7 @@ pub fn run() {
             get_database_stats,
             archive_completed_transactions,
             
-            // Zebra printer commands  
-            get_printer_settings,
-            set_printer_settings,
-            print_barcodes_to_zebra,
-            test_zebra_printer,
-            print_test_label,
-            get_zebra_printer_status,
-            discover_zebra_printers,
-            
+                    
             // Scanner commands
             start_manual_scan_session,
             stop_scan_session,
@@ -550,20 +354,17 @@ pub fn run() {
             set_department_mapping,
             delete_department_mapping,
             
-            // Item management commands
+            // Items catalogue commands
+            get_items,
             add_item,
-            get_all_items,
-            get_item_name,
+            update_item,
             delete_item,
-            import_items_from_list,
-            import_items_from_text,
-            import_items_from_csv_file,
-            import_items_from_default_file,
             
-            // Serial scanner commands
-            open_serial_scanner,
-            close_serial_scanner,
-            show_quick_scan_popup,
+            // Legacy item name commands
+            import_item_names,
+            get_item_display_name,
+            set_item_name,
+            
             
         ])
         .run(tauri::generate_context!())
