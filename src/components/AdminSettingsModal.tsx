@@ -1,9 +1,15 @@
 import React from 'react';
-import { X, Plus, Download, Trash2 } from 'lucide-react';
+import { X, Plus, Download, Trash2, Edit2, Save, XCircle } from 'lucide-react';
 
 interface DepartmentMapping {
   prefix: string;
   department: string;
+}
+
+interface InventoryItem {
+  barcode: string;
+  department?: string;
+  description?: string;
 }
 
 interface AdminSettingsModalProps {
@@ -20,6 +26,18 @@ interface AdminSettingsModalProps {
   newDepartment: string;
   setNewDepartment: (dep: string) => void;
   handleAddDepartmentMapping: () => void;
+  handleUpdateDepartmentMapping: (oldPrefix: string, newPrefix: string, newDepartment: string) => void;
+  handleDeleteDepartmentMapping: (prefix: string) => void;
+  items: InventoryItem[];
+  newItemBarcode: string;
+  setNewItemBarcode: (v: string) => void;
+  newItemDepartment: string;
+  setNewItemDepartment: (v: string) => void;
+  newItemDescription: string;
+  setNewItemDescription: (v: string) => void;
+  handleAddItem: () => void;
+  handleUpdateItem: (barcode: string, department: string | undefined, description: string | undefined) => void;
+  handleDeleteItem: (barcode: string) => void;
   handleExport: () => void;
   handleClearLogs: () => void;
   checkedOutItemsCount: number;
@@ -41,6 +59,18 @@ const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
   newDepartment,
   setNewDepartment,
   handleAddDepartmentMapping,
+  handleUpdateDepartmentMapping,
+  handleDeleteDepartmentMapping,
+  items,
+  newItemBarcode,
+  setNewItemBarcode,
+  newItemDepartment,
+  setNewItemDepartment,
+  newItemDescription,
+  setNewItemDescription,
+  handleAddItem,
+  handleUpdateItem,
+  handleDeleteItem,
   handleExport,
   handleClearLogs,
   checkedOutItemsCount,
@@ -48,6 +78,37 @@ const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
   departmentMappingsCount
 }) => {
   if (!show) return null;
+  const [editingDept, setEditingDept] = React.useState<string | null>(null);
+  const [editPrefix, setEditPrefix] = React.useState("");
+  const [editDepartment, setEditDepartment] = React.useState("");
+  const startEditDept = (m: DepartmentMapping) => {
+    setEditingDept(m.prefix);
+    setEditPrefix(m.prefix);
+    setEditDepartment(m.department);
+  };
+  const saveEditDept = () => {
+    if (editingDept) {
+      handleUpdateDepartmentMapping(editingDept, editPrefix, editDepartment);
+      setEditingDept(null);
+    }
+  };
+  const cancelEditDept = () => { setEditingDept(null); };
+
+  const [editingItem, setEditingItem] = React.useState<string | null>(null);
+  const [editItemDepartment, setEditItemDepartment] = React.useState("");
+  const [editItemDescription, setEditItemDescription] = React.useState("");
+  const startEditItem = (it: InventoryItem) => {
+    setEditingItem(it.barcode);
+    setEditItemDepartment(it.department || "");
+    setEditItemDescription(it.description || "");
+  };
+  const saveEditItem = () => {
+    if (editingItem) {
+      handleUpdateItem(editingItem, editItemDepartment || undefined, editItemDescription || undefined);
+      setEditingItem(null);
+    }
+  };
+  const cancelEditItem = () => setEditingItem(null);
   return (
     <div style={{
       position: 'fixed',
@@ -207,25 +268,64 @@ const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
                   <Plus style={{ width: '14px', height: '14px' }} />
                 </button>
               </div>
-              <div style={{ maxHeight: '120px', overflow: 'auto' }}>
-                {departmentMappings.map((mapping) => (
-                  <div
-                    key={mapping.prefix}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '8px',
-                      backgroundColor: '#000',
-                      color: '#faf8f5',
-                      marginBottom: '2px',
-                      fontSize: '14px'
-                    }}
-                  >
-                    <span style={{ fontWeight: 'bold' }}>{mapping.prefix}</span>
-                    <span>{mapping.department}</span>
-                  </div>
-                ))}
+              <div style={{ maxHeight: '160px', overflow: 'auto' }}>
+                {departmentMappings.map((mapping) => {
+                  const isEditing = editingDept === mapping.prefix;
+                  return (
+                    <div key={mapping.prefix} style={{ display:'flex', alignItems:'center', gap:'6px', padding:'6px', backgroundColor:'#000', color:'#faf8f5', marginBottom:'2px', fontSize:'12px' }}>
+                      {isEditing ? (
+                        <>
+                          <input value={editPrefix} onChange={e=>setEditPrefix(e.target.value.toUpperCase())} style={{ width:'70px', fontSize:'12px'}} />
+                          <input value={editDepartment} onChange={e=>setEditDepartment(e.target.value)} style={{ flex:1, fontSize:'12px'}} />
+                          <button onClick={saveEditDept} style={{ background:'#4ade80', border:'1px solid #fff', cursor:'pointer' }}><Save style={{ width:14}} /></button>
+                          <button onClick={cancelEditDept} style={{ background:'#ef4444', border:'1px solid #fff', cursor:'pointer' }}><XCircle style={{ width:14}} /></button>
+                        </>
+                      ) : (
+                        <>
+                          <span style={{ fontWeight:'bold', width:'70px'}}>{mapping.prefix}</span>
+                          <span style={{ flex:1 }}>{mapping.department}</span>
+                          <button onClick={()=>startEditDept(mapping)} style={{ background:'#4ade80', border:'1px solid #fff', cursor:'pointer' }}><Edit2 style={{ width:14}} /></button>
+                          <button onClick={()=>handleDeleteDepartmentMapping(mapping.prefix)} style={{ background:'#ef4444', border:'1px solid #fff', cursor:'pointer' }}><Trash2 style={{ width:14}} /></button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            {/* Items Catalogue */}
+            <div>
+              <h3 style={{ fontSize:'16px', fontWeight:'bold', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'10px' }}>ITEMS</h3>
+              <div style={{ display:'flex', gap:'10px', marginBottom:'10px' }}>
+                <input value={newItemBarcode} onChange={e=>setNewItemBarcode(e.target.value.toUpperCase())} placeholder="BARCODE" style={{ flex:1, padding:'6px', border:'2px solid #000', fontSize:'12px'}} />
+                <input value={newItemDepartment} onChange={e=>setNewItemDepartment(e.target.value)} placeholder="DEPARTMENT" style={{ flex:1, padding:'6px', border:'2px solid #000', fontSize:'12px'}} />
+                <input value={newItemDescription} onChange={e=>setNewItemDescription(e.target.value)} placeholder="DESCRIPTION" style={{ flex:2, padding:'6px', border:'2px solid #000', fontSize:'12px'}} />
+                <button onClick={handleAddItem} style={{ padding:'6px 10px', border:'2px solid #000', background:'#4ade80', cursor:'pointer' }}><Plus style={{ width:14}} /></button>
+              </div>
+              <div style={{ maxHeight:'160px', overflow:'auto', border:'1px solid #000' }}>
+                {items.map(it => {
+                  const isEditing = editingItem === it.barcode;
+                  return (
+                    <div key={it.barcode} style={{ display:'flex', gap:'6px', alignItems:'center', padding:'4px 6px', background:'#000', color:'#faf8f5', fontSize:'12px', marginBottom:'2px' }}>
+                      <span style={{ fontWeight:'bold', width:'90px' }}>{it.barcode}</span>
+                      {isEditing ? (
+                        <>
+                          <input value={editItemDepartment} onChange={e=>setEditItemDepartment(e.target.value)} style={{ width:'120px', fontSize:'12px'}} />
+                          <input value={editItemDescription} onChange={e=>setEditItemDescription(e.target.value)} style={{ flex:1, fontSize:'12px'}} />
+                          <button onClick={saveEditItem} style={{ background:'#4ade80', border:'1px solid #fff', cursor:'pointer' }}><Save style={{ width:14}} /></button>
+                          <button onClick={cancelEditItem} style={{ background:'#ef4444', border:'1px solid #fff', cursor:'pointer' }}><XCircle style={{ width:14}} /></button>
+                        </>
+                      ) : (
+                        <>
+                          <span style={{ width:'120px' }}>{it.department || '-'}</span>
+                          <span style={{ flex:1 }}>{it.description || ''}</span>
+                          <button onClick={()=>startEditItem(it)} style={{ background:'#4ade80', border:'1px solid #fff', cursor:'pointer' }}><Edit2 style={{ width:14}} /></button>
+                          <button onClick={()=>handleDeleteItem(it.barcode)} style={{ background:'#ef4444', border:'1px solid #fff', cursor:'pointer' }}><Trash2 style={{ width:14}} /></button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
             {/* Action Buttons */}

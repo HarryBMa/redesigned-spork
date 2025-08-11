@@ -24,6 +24,13 @@ pub struct DepartmentMapping {
     pub department: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InventoryItem {
+    pub barcode: String,
+    pub department: Option<String>,
+    pub description: Option<String>,
+}
+
 pub struct Database {
     conn: Connection,
 }
@@ -77,6 +84,16 @@ impl Database {
             "CREATE TABLE IF NOT EXISTS department_mappings (
                 prefix TEXT PRIMARY KEY,
                 department TEXT NOT NULL
+            )",
+            [],
+        )?;
+
+        // Create items table (managed inventory catalogue)
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS items (
+                barcode TEXT PRIMARY KEY,
+                department TEXT,
+                description TEXT
             )",
             [],
         )?;
@@ -265,6 +282,49 @@ impl Database {
         self.conn.execute(
             "DELETE FROM department_mappings WHERE prefix = ?1",
             params![prefix],
+        )?;
+        Ok(())
+    }
+
+    // ------------------ Items CRUD ------------------
+    pub fn get_items(&self, limit: Option<i64>) -> Result<Vec<InventoryItem>> {
+        let sql = match limit {
+            Some(l) => format!("SELECT barcode, department, description FROM items ORDER BY barcode LIMIT {}", l),
+            None => "SELECT barcode, department, description FROM items ORDER BY barcode".to_string(),
+        };
+        let mut stmt = self.conn.prepare(&sql)?;
+        let items_iter = stmt.query_map([], |row| {
+            Ok(InventoryItem {
+                barcode: row.get(0)?,
+                department: row.get(1)?,
+                description: row.get(2)?,
+            })
+        })?;
+        let mut items = Vec::new();
+        for item in items_iter { items.push(item?); }
+        Ok(items)
+    }
+
+    pub fn add_item(&self, barcode: &str, department: Option<&str>, description: Option<&str>) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO items (barcode, department, description) VALUES (?1, ?2, ?3)",
+            params![barcode, department, description],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_item(&self, barcode: &str, department: Option<&str>, description: Option<&str>) -> Result<()> {
+        self.conn.execute(
+            "UPDATE items SET department = ?2, description = ?3 WHERE barcode = ?1",
+            params![barcode, department, description],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_item(&self, barcode: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM items WHERE barcode = ?1",
+            params![barcode],
         )?;
         Ok(())
     }

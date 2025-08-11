@@ -7,7 +7,7 @@ mod alert;
 mod tray;
 mod printer;
 
-use database::{Database, ScanLog, DepartmentMapping};
+use database::{Database, ScanLog, DepartmentMapping, InventoryItem};
 use logger::Logger;
 use scanner::Scanner;
 use export::Exporter;
@@ -213,6 +213,31 @@ fn delete_department_mapping(prefix: String) -> Result<(), String> {
     db.delete_department_mapping(&prefix).map_err(|e| e.to_string())
 }
 
+// Items (inventory catalogue) commands
+#[tauri::command]
+fn get_items(limit: Option<i64>) -> Result<Vec<InventoryItem>, String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    db.get_items(limit).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn add_item(barcode: String, department: Option<String>, description: Option<String>) -> Result<(), String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    db.add_item(&barcode, department.as_deref(), description.as_deref()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_item(barcode: String, department: Option<String>, description: Option<String>) -> Result<(), String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    db.update_item(&barcode, department.as_deref(), description.as_deref()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_item(barcode: String) -> Result<(), String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    db.delete_item(&barcode).map_err(|e| e.to_string())
+}
+
 // Window Management Commands
 #[tauri::command]
 fn close_window(app: AppHandle, label: String) -> Result<(), String> {
@@ -339,6 +364,11 @@ pub fn run() {
             get_department_mappings,
             set_department_mapping,
             delete_department_mapping,
+            // Items
+            get_items,
+            add_item,
+            update_item,
+            delete_item,
             
             
         ])

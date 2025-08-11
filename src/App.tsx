@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { Settings, Download, Trash2, Plus, QrCode, X } from 'lucide-react';
-import BarcodeGenerator from './components/features/BarcodeGenerator';
+import { Settings, Download } from 'lucide-react';
 import InputSection from './components/InputSection';
 import InventoryTable from './components/InventoryTable';
 import AdminSettingsModal from './components/AdminSettingsModal';
@@ -26,6 +25,12 @@ interface DepartmentMapping {
   department: string;
 }
 
+interface InventoryItem {
+  barcode: string;
+  department?: string;
+  description?: string;
+}
+
 const App: React.FC = () => {
   // State to manage the list of registered articles
   const [articles, setArticles] = useState<Article[]>([]);
@@ -42,7 +47,11 @@ const App: React.FC = () => {
   const [departmentMappings, setDepartmentMappings] = useState<DepartmentMapping[]>([]);
   const [newPrefix, setNewPrefix] = useState('');
   const [newDepartment, setNewDepartment] = useState('');
-  const [showBarcodeGenerator, setShowBarcodeGenerator] = useState(false);
+  // Items catalogue state
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [newItemBarcode, setNewItemBarcode] = useState("");
+  const [newItemDepartment, setNewItemDepartment] = useState("");
+  const [newItemDescription, setNewItemDescription] = useState("");
 
   // State for toast notifications
   const [toast, setToast] = useState<{
@@ -55,7 +64,7 @@ const App: React.FC = () => {
     show: false
   });
 
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null as unknown as HTMLInputElement);
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -93,15 +102,17 @@ const App: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [logs, mappings, checkedOut] = await Promise.all([
+      const [logs, mappings, checkedOut, allItems] = await Promise.all([
         invoke<ScanLog[]>('get_recent_logs', { limit: 100 }),
         invoke<DepartmentMapping[]>('get_department_mappings'),
         invoke<ScanLog[]>('get_checked_out_items'),
+        invoke<InventoryItem[]>('get_items', { limit: 500 })
       ]);
       
       setRecentLogs(logs);
       setDepartmentMappings(mappings);
-      setCheckedOutItems(checkedOut);
+  setCheckedOutItems(checkedOut);
+  setItems(allItems);
       
       // Convert checked out items to local articles format for display
       const convertedArticles = checkedOut.map(item => ({
@@ -220,6 +231,70 @@ const App: React.FC = () => {
     } catch (error) {
       console.error('Error adding department mapping:', error);
       showToast('Failed to add department mapping', 'error');
+    }
+  };
+
+  const handleUpdateDepartmentMapping = async (oldPrefix: string, updatedPrefix: string, updatedDepartment: string) => {
+    try {
+      // If prefix changed, delete old then add new to keep PK integrity
+      if (oldPrefix !== updatedPrefix) {
+        await invoke('delete_department_mapping', { prefix: oldPrefix });
+      }
+      await invoke('set_department_mapping', { prefix: updatedPrefix.toUpperCase(), department: updatedDepartment });
+      loadData();
+      showToast('Department mapping updated', 'success');
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to update mapping', 'error');
+    }
+  };
+
+  const handleDeleteDepartmentMapping = async (prefix: string) => {
+    try {
+      await invoke('delete_department_mapping', { prefix });
+      loadData();
+      showToast('Department mapping deleted', 'warning');
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to delete mapping', 'error');
+    }
+  };
+
+  // Items CRUD
+  const handleAddItem = async () => {
+    if (!newItemBarcode.trim()) return;
+    try {
+      await invoke('add_item', { barcode: newItemBarcode.toUpperCase(), department: newItemDepartment || null, description: newItemDescription || null });
+      setNewItemBarcode("");
+      setNewItemDepartment("");
+      setNewItemDescription("");
+      loadData();
+      showToast('Item saved', 'success');
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to save item', 'error');
+    }
+  };
+
+  const handleUpdateItem = async (barcode: string, department?: string, description?: string) => {
+    try {
+      await invoke('update_item', { barcode, department: department || null, description: description || null });
+      loadData();
+      showToast('Item updated', 'success');
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to update item', 'error');
+    }
+  };
+
+  const handleDeleteItem = async (barcode: string) => {
+    try {
+      await invoke('delete_item', { barcode });
+      loadData();
+      showToast('Item deleted', 'warning');
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to delete item', 'error');
     }
   };
 
@@ -388,6 +463,18 @@ const App: React.FC = () => {
         newDepartment={newDepartment}
         setNewDepartment={setNewDepartment}
         handleAddDepartmentMapping={handleAddDepartmentMapping}
+  handleUpdateDepartmentMapping={handleUpdateDepartmentMapping}
+  handleDeleteDepartmentMapping={handleDeleteDepartmentMapping}
+  items={items}
+  newItemBarcode={newItemBarcode}
+  setNewItemBarcode={setNewItemBarcode}
+  newItemDepartment={newItemDepartment}
+  setNewItemDepartment={setNewItemDepartment}
+  newItemDescription={newItemDescription}
+  setNewItemDescription={setNewItemDescription}
+  handleAddItem={handleAddItem}
+  handleUpdateItem={handleUpdateItem}
+  handleDeleteItem={handleDeleteItem}
         handleExport={handleExport}
         handleClearLogs={handleClearLogs}
         checkedOutItemsCount={checkedOutItems.length}

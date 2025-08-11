@@ -3,6 +3,8 @@ use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
     AppHandle, Manager, WebviewWindowBuilder, Emitter,
 };
+// We'll construct a custom single-color tray icon (only for the tray) in the requested color #f88379.
+use tauri::image::Image; // provides Image::from_rgba for custom icon creation
 
 pub struct TrayManager;
 
@@ -28,10 +30,14 @@ impl TrayManager {
             .item(&quit)
             .build()?;
 
-        // Build tray icon - using a black icon for better visibility
+        // Use a generated 32x32 PNG (derived from icon.svg with color #f88379) for tray icon.
+        // Falls back to default window icon if parsing fails.
+        let tray_icon_image = Image::from_bytes(include_bytes!("../icons/tray-icon-32.png"))
+            .unwrap_or_else(|_| app.default_window_icon().unwrap().clone());
+
         let _tray = TrayIconBuilder::new()
             .menu(&menu)
-            .icon(app.default_window_icon().unwrap().clone())
+            .icon(tray_icon_image)
             .tooltip("Harry's Lilla Lager - Kirurgiskt lagersystem")
             .on_menu_event(move |app_handle, event| {
                 match event.id().as_ref() {
